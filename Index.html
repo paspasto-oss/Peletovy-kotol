@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="sk">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Revízna správa – Spektra Install</title>
+  <link rel="icon" type="image/png" sizes="32x32" href="./assets/logo-32.png?v=3">
+  <link rel="icon" type="image/png" sizes="48x48" href="./assets/logo-48.png?v=3">
+  <link rel="apple-touch-icon" sizes="180x180" href="./icons/icon-192.png?v=3">
+  <link rel="manifest" href="./manifest.webmanifest?v=3" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <style>
+    :root { color-scheme: dark; }
+    body{background:#0b0f13;color:#e5e7eb;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,Noto Sans,sans-serif;}
+    .input{background:#1f2937;color:#fff;border:1px solid #374151;border-radius:6px;padding:6px 8px;font-size:14px;}
+    .input:focus{outline:none;border-color:#f59e0b;background:#111827;box-shadow:0 0 0 2px rgba(245,158,11,.25);}
+    input[type="checkbox"]{accent-color:#f59e0b;transform:scale(1.1);}
+    .btn{padding:6px 12px;border-radius:6px;font-weight:500;}
+
+    /* presná A4 plocha (exportujeme wrapper) */
+    #pdf-wrapper{background:#fff;width:210mm;height:297mm;margin:0 auto;overflow:hidden;display:flex;justify-content:center;align-items:flex-start;}
+    .sheet{width:210mm;height:297mm;background:#fff;color:#000;border-radius:12px;overflow:hidden;box-sizing:border-box;}
+    #pdf-sheet{width:100%;height:100%;box-sizing:border-box;padding:10mm 12mm;}
+
+    /* tabuľka a texty v PDF – drobnejšie, aby to vošlo na 1 stranu */
+    #pdf-sheet table{table-layout:fixed;width:100%;border-collapse:collapse;}
+    #pdf-sheet th,#pdf-sheet td{border:1px solid #e5e7eb;padding:6px;font-size:11px;color:#000!important;word-break:break-word;white-space:pre-wrap;line-height:1.2;}
+
+    /* kompaktný režim – zapína sa IBA počas exportu */
+    #pdf-sheet.pdf-compact{line-height:1.12;font-size:11px;}
+  </style>
+</head>
+<body class="min-h-screen">
+  <div class="max-w-6xl mx-auto p-4">
+    <h1 class="text-xl font-semibold mb-3">Revízna správa – Spektra Install</h1>
+    <div id="root"></div>
+  </div>
+
+  <script src="./app.js"></script>
+  <script>
+    if('serviceWorker' in navigator){
+      addEventListener('load',()=>navigator.serviceWorker.register('./sw.js'));
+    }
+  </script>
+</body>
+</html>
