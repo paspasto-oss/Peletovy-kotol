@@ -373,14 +373,15 @@ function App(){
               React.createElement(SignBox,{title:'Podpis revízneho technika', img:report.podpisTechnika, stamp:report.podpisTechnikaStampUrl})
             ),
 
-            React.createElement('div',{className:'px-4 pb-3 text-[10px] text-neutral-600'},
-              React.createElement('b',null,'Normy a predpisy: '),
-              report.type==='hp'
-                ? ' STN EN 378; Nariadenie (EÚ) 517/2014 (F-Gas); STN 06 0310; STN EN 14511'
-                : (report.type==='pellet'
-                   ? ' STN EN 303-5; STN 73 4201; STN EN 14785'
-                   : ' STN EN 15502-1/2; STN 38 6441; STN 07 0703')
-            )
+            React.createElement('div',{className:'px-6 pb-4 text-[10px] text-neutral-600 space-y-1'},
+  React.createElement('div',null,
+    React.createElement('b',null,'Normy a predpisy: '),
+    'STN EN 15502-1/2; STN 38 6441; STN 07 0703'
+  ),
+  React.createElement('div',{className:'italic text-[9px] leading-tight text-neutral-500'},
+    'Ochrana osobných údajov: Údaje uvedené v tejto správe sú spracúvané spoločnosťou Spektra Install s.r.o., IČO 53690036, výhradne na účel vyhotovenia, evidencie a archivácie revíznej dokumentácie podľa platných právnych predpisov a nariadenia GDPR.'
+  )
+)
           )
         ),
         React.createElement('div',{className:'mt-3 text-center'},
