@@ -1,12 +1,23 @@
 /* global React, ReactDOM, html2pdf */
-const { useState } = React;
+const { useState, useMemo } = React;
 
-/* Helpers */
+/* ===================== Pomôcky ===================== */
 const pad2 = (n)=>String(n).padStart(2,'0');
 const todayStr = ()=>{ const d=new Date(); return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`; };
-const genReportNo = ()=>{ const d=new Date(); return `RS-${d.getFullYear()}${pad2(d.getMonth()+1)}${pad2(d.getDate())}-${pad2(d.getHours())}${pad2(d.getMinutes())}`; };
 
-/* Šablóny */
+// Sekvenčné číslovanie: RS-YYYY-0001 (lokálne podľa roka)
+function nextReportNo(){
+  const y = new Date().getFullYear();
+  const key = `revizie.seq.${y}`;
+  const cur = parseInt(localStorage.getItem(key)||'0',10) + 1;
+  localStorage.setItem(key, String(cur));
+  return `RS-${y}-${String(cur).padStart(4,'0')}`;
+}
+
+// Bezpečné JSON (klon)
+const clone = (o)=>JSON.parse(JSON.stringify(o));
+
+/* ===================== Šablóny ===================== */
 const TEMPLATES = (()=>{
   const BOILER = {
     label:"Plynový kotol", deviceTitle:"Plynový kotol", snLabel:"Výrobné číslo",
@@ -145,14 +156,13 @@ const TEMPLATES = (()=>{
       zaznam:{ok:1,val:"Bez závad, kontrola o 12 mes."}
     }
   };
-
   return { boiler: BOILER, hp: HP, pellet: PELLET };
 })();
 
-/* Default report */
+/* ===================== Default report ===================== */
 const DEFAULT_REPORT = (type="boiler") => ({
   type,
-  cislo: genReportNo(),
+  cislo: nextReportNo(),
   datum: todayStr(),
   zakaznik:{
     nazov:"Bytový dom Hurbanova 12",
@@ -168,7 +178,32 @@ const DEFAULT_REPORT = (type="boiler") => ({
   podpisTechnika:""
 });
 
-/* PDF drobnosti */
+/* ===================== Archív (LocalStorage) ===================== */
+const ARCH_KEY = 'revizie.archive.v1';
+const loadArchive = ()=>{ try{ return JSON.parse(localStorage.getItem(ARCH_KEY)||'[]'); }catch{ return []; } };
+const saveArchive = (list)=> localStorage.setItem(ARCH_KEY, JSON.stringify(list));
+
+function addToArchive(report){
+  const list = loadArchive();
+  const entry = {
+    id: crypto.randomUUID(),
+    cislo: report.cislo,
+    datum: report.datum,
+    typ: report.type,
+    zakaznik: report.zakaznik?.nazov || '',
+    createdAt: new Date().toISOString(),
+    data: clone(report)
+  };
+  list.unshift(entry); // najnovšie navrch
+  saveArchive(list);
+  return entry.id;
+}
+function deleteFromArchive(id){
+  const list = loadArchive().filter(e=>e.id!==id);
+  saveArchive(list);
+}
+
+/* ===================== PDF drobnosti ===================== */
 function Metric({label,value}){
   return React.createElement('div',{className:'border rounded p-2 bg-white'},
     React.createElement('div',{className:'text-[10px] text-neutral-500 mb-1'},label),
@@ -186,25 +221,21 @@ function SignBox({title,img,stamp}){
   );
 }
 
-/* App */
+/* ===================== App ===================== */
 function App(){
   const [report,setReport] = useState(()=>DEFAULT_REPORT("boiler"));
-  const setChecklistVal = (k,p)=> setReport(r=>({...r, checklist:{...r.checklist, [k]:{...(r.checklist[k]||{}), ...p}}}));
+  const [search, setSearch] = useState('');
+  const archive = useMemo(()=> loadArchive(), [report.cislo]); // rerender po uložení (jednoduchý trik)
 
+  const setChecklistVal = (k,p)=> setReport(r=>({...r, checklist:{...r.checklist, [k]:{...(r.checklist[k]||{}), ...p}}}));
   const Input = (props)=>React.createElement('input',{...props,className:`input w-full ${props.className||''}`});
 
-  /* Share PDF – 1×A4 */
+  /* ---- share PDF (1× A4, Share Sheet + fallback) ---- */
   const sharePDF = async () => {
     const wrapper = document.getElementById('pdf-wrapper');
     const sheet   = document.getElementById('pdf-sheet');
-
-    // kompaktné medzery iba počas generovania
     sheet.classList.add('pdf-compact');
-
-    // A4 v px (96 dpi)
     const A4W=794, A4H=1123;
-
-    // jemné doškálovanie ak presahuje
     const prev={transform:wrapper.style.transform,transformOrigin:wrapper.style.transformOrigin,width:wrapper.style.width,height:wrapper.style.height};
     const realW=Math.ceil(wrapper.scrollWidth), realH=Math.ceil(wrapper.scrollHeight);
     if(realW>A4W || realH>A4H){
@@ -214,14 +245,13 @@ function App(){
       wrapper.style.width=`${A4W}px`;
       wrapper.style.height=`${A4H}px`;
     }
-
     try{
       const worker = html2pdf().set({
         margin:0,
         image:{type:'jpeg',quality:0.98},
         html2canvas:{scale:2,useCORS:true,allowTaint:true,scrollY:0,backgroundColor:'#fff',width:A4W,height:A4H,windowWidth:A4W,windowHeight:A4H,letterRendering:true},
         jsPDF:{unit:'mm',format:'a4',orientation:'portrait'},
-        pagebreak:{mode:[]} // bez lámania – presne 1 strana
+        pagebreak:{mode:[]}
       }).from(wrapper);
 
       const pdf = await worker.toPdf().get('pdf');
@@ -231,15 +261,12 @@ function App(){
       if(navigator.canShare){
         const file = new File([blob], filename, { type:'application/pdf' });
         if(navigator.canShare({files:[file]})){
-          try{ await navigator.share({ files:[file], title:'Revízna správa', text:'PDF (1× A4)' }); sheet.classList.remove('pdf-compact'); return; }catch(_){}
+          try{ await navigator.share({ files:[file], title:'Revízna správa', text:'PDF (1× A4)' }); sheet.classList.remove('pdf-compact'); return; }catch(_){/* zrušené */}
         }
       }
-      // fallback – otvor do novej karty alebo stiahni
       const url = URL.createObjectURL(blob);
       const w = window.open(url,'_blank');
-      if(!w){
-        const a=document.createElement('a'); a.href=url; a.download=filename; document.body.appendChild(a); a.click(); a.remove();
-      }
+      if(!w){ const a=document.createElement('a'); a.href=url; a.download=filename; document.body.appendChild(a); a.click(); a.remove(); }
       setTimeout(()=>URL.revokeObjectURL(url),1500);
     } finally {
       sheet.classList.remove('pdf-compact');
@@ -247,42 +274,63 @@ function App(){
     }
   };
 
+  /* ---- Archív akcie ---- */
+  const saveCurrentToArchive = ()=>{
+    const id = addToArchive(report);
+    alert(`Uložené do archívu: ${report.cislo}`);
+  };
+  const loadFromArchive = (entry)=>{
+    setReport(clone(entry.data));
+  };
+  const deleteEntry = (id)=>{ if(confirm('Zmazať z archívu?')){ deleteFromArchive(id); setReport(r=>({...r})); } };
+  const newReport = ()=> setReport(DEFAULT_REPORT(report.type));
+
   const tmpl = TEMPLATES[report.type];
+  const filteredArchive = useMemo(()=>{
+    const q = search.trim().toLowerCase();
+    const list = loadArchive();
+    if(!q) return list;
+    return list.filter(e=>
+      (e.cislo||'').toLowerCase().includes(q) ||
+      (e.zakaznik||'').toLowerCase().includes(q) ||
+      (e.typ||'').toLowerCase().includes(q)
+    );
+  },[search, report.cislo]);
 
   return React.createElement('div',null,
-    React.createElement('div',{className:'grid grid-cols-1 lg:grid-cols-2 gap-6'},
+    React.createElement('div',{className:'grid grid-cols-1 lg:grid-cols-3 gap-6'},
 
-      /* Editor (ľavo) */
-      React.createElement('section',{className:'p-4 space-y-4 rounded-xl border border-white/10 bg-white/5'},
-        React.createElement('div',{className:'flex items-center gap-3'},
-          React.createElement('label',{className:'text-sm font-medium'},"Typ správy"),
-          React.createElement('select',{
-            className:'input !bg-gray-800 !text-white w-56',
-            value:report.type,
-            onChange:e=>{
-              const t=e.target.value;
-              setReport(r=>({...r, type:t, checklist:{...TEMPLATES[t].defaults}}));
-            }
-          },[
-            React.createElement('option',{value:'boiler',key:'b'},"Plynový kotol"),
-            React.createElement('option',{value:'hp',key:'h'},"Tepelné čerpadlo"),
-            React.createElement('option',{value:'pellet',key:'p'},"Kotol na pelety")
-          ])
+      /* ====== Editor ====== */
+      React.createElement('section',{className:'p-4 space-y-4 rounded-xl border border-white/10 bg-white/5 lg:col-span-2'},
+        React.createElement('div',{className:'flex items-center gap-3 justify-between'},
+          React.createElement('div',{className:'flex items-center gap-3'},
+            React.createElement('label',{className:'text-sm font-medium'},'Typ správy'),
+            React.createElement('select',{
+              className:'input !bg-gray-800 !text-white w-56',
+              value:report.type,
+              onChange:e=>{ const t=e.target.value; setReport(r=>({...DEFAULT_REPORT(t)})); }
+            },[
+              React.createElement('option',{value:'boiler',key:'b'},'Plynový kotol'),
+              React.createElement('option',{value:'hp',key:'h'},'Tepelné čerpadlo'),
+              React.createElement('option',{value:'pellet',key:'p'},'Kotol na pelety')
+            ])
+          ),
+          React.createElement('div',{className:'text-right text-sm opacity-80'}, `Číslo: ${report.cislo}`)
         ),
 
-        React.createElement('h2',{className:'text-xl font-semibold'},"Údaje"),
+        React.createElement('h2',{className:'text-xl font-semibold'},'Údaje'),
         React.createElement('div',{className:'grid grid-cols-1 md:grid-cols-2 gap-3'},
-          React.createElement('label',null,"Názov",Input({value:report.zakaznik.nazov,onChange:e=>setReport(r=>({...r,zakaznik:{...r.zakaznik,nazov:e.target.value}}))})),
-          React.createElement('label',null,"Adresa",Input({value:report.zakaznik.adresa,onChange:e=>setReport(r=>({...r,zakaznik:{...r.zakaznik,adresa:e.target.value}}))})),
-          React.createElement('label',null,"IČO",Input({value:report.zakaznik.ico,onChange:e=>setReport(r=>({...r,zakaznik:{...r.zakaznik,ico:e.target.value}}))})),
-          React.createElement('label',null,"DIČ",Input({value:report.zakaznik.dic,onChange:e=>setReport(r=>({...r,zakaznik:{...r.zakaznik,dic:e.target.value}}))})),
-          React.createElement('label',{className:'md:col-span-2'},"E-mail",Input({type:'email',value:report.zakaznik.email,onChange:e=>setReport(r=>({...r,zakaznik:{...r.zakaznik,email:e.target.value}}))})),
-          React.createElement('label',{className:'md:col-span-2'},"Dátum revízie",
+          React.createElement('label',null,'Názov',Input({value:report.zakaznik.nazov,onChange:e=>setReport(r=>({...r,zakaznik:{...r.zakaznik,nazov:e.target.value}}))})),
+          React.createElement('label',null,'Adresa',Input({value:report.zakaznik.adresa,onChange:e=>setReport(r=>({...r,zakaznik:{...r.zakaznik,adresa:e.target.value}}))})),
+          React.createElement('label',null,'IČO',Input({value:report.zakaznik.ico,onChange:e=>setReport(r=>({...r,zakaznik:{...r.zakaznik,ico:e.target.value}}))})),
+          React.createElement('label',null,'DIČ',Input({value:report.zakaznik.dic,onChange:e=>setReport(r=>({...r,zakaznik:{...r.zakaznik,dic:e.target.value}}))})),
+          React.createElement('label',{className:'md:col-span-2'},'E-mail',Input({type:'email',value:report.zakaznik.email,onChange:e=>setReport(r=>({...r,zakaznik:{...r.zakaznik,email:e.target.value}}))})),
+          React.createElement('label',{className:'md:col-span-2'},'Dátum revízie',
             React.createElement('input',{type:'date',className:'input w-full',value:report.datum,onChange:e=>setReport(r=>({...r,datum:e.target.value}))})
           )
         ),
 
-        React.createElement('h3',{className:'text-lg font-semibold'},"Merania – rýchle polia"),
+        React.createElement('h3',{className:'text-lg font-semibold'},'Merania – rýchle polia'),
         React.createElement('div',{className:'grid grid-cols-1 md:grid-cols-2 gap-3'},
           ...tmpl.metrics.map(([k,lab]) =>
             React.createElement('label',{key:k},lab,Input({value:report.checklist[k]?.val||"",onChange:e=>setChecklistVal(k,{val:e.target.value})}))
@@ -299,94 +347,128 @@ function App(){
         ),
 
         React.createElement('div',{className:'flex gap-2 flex-wrap pt-2'},
-          React.createElement('button',{className:'btn bg-amber-600 text-white',onClick:sharePDF},"Zdieľať PDF")
+          React.createElement('button',{className:'btn bg-amber-600 text-white',onClick:sharePDF},'Zdieľať PDF'),
+          React.createElement('button',{className:'btn bg-emerald-600 text-white',onClick:saveCurrentToArchive},'Uložiť do archívu'),
+          React.createElement('button',{className:'btn bg-sky-700 text-white',onClick:newReport},'Nová správa')
         )
       ),
 
-      /* PDF náhľad (pravo) */
-      React.createElement('section',{className:'p-2 rounded-xl border border-white/10 bg-white/5'},
-        React.createElement('div',{id:'pdf-wrapper',className:'mx-auto'},
-          React.createElement('div',{id:'pdf-sheet',className:'sheet'},
-
-            /* Hlavička */
-            React.createElement('div',{className:'p-4 border-b flex gap-4 items-start'},
-              React.createElement('div',{className:'w-16 h-16 rounded bg-white grid place-items-center overflow-hidden'},
-                React.createElement('img',{src:report.logoUrl,className:'object-contain w-full h-full'})
-              ),
-              React.createElement('div',{className:'flex-1'},
-                React.createElement('div',{className:'text-lg font-bold'},"Spektra Install"),
-                React.createElement('div',{className:'text-[11px] leading-5'},
-                  React.createElement('div',null,React.createElement('b',null,'IČO:'),' 53690036'),
-                  React.createElement('div',null,React.createElement('b',null,'Sídlo:'),' Rajecká Lesná 98, 01315')
-                )
-              ),
-              React.createElement('div',{className:'text-right'},
-                React.createElement('div',{className:'text-[11px]'},'Číslo správy:'),
-                React.createElement('div',{className:'text-base font-semibold'},report.cislo),
-                React.createElement('div',{className:'text-[11px]'},'Dátum: ',report.datum)
-              )
-            ),
-
-            /* Zákazník / Zariadenie */
-            React.createElement('div',{className:'px-4 pt-3 grid grid-cols-2 gap-3 text-[12px]'},
-              React.createElement('div',{className:'border rounded p-2 text-[11px] bg-white'},
-                React.createElement('div',{className:'font-semibold mb-1'},"Zákazník"),
-                React.createElement('div',null,report.zakaznik.nazov),
-                React.createElement('div',null,report.zakaznik.adresa),
-                React.createElement('div',null,'IČO: ',report.zakaznik.ico,' • DIČ: ',report.zakaznik.dic,' • e-mail: ',report.zakaznik.email)
-              ),
-              React.createElement('div',{className:'border rounded p-2 text-[11px] bg-white'},
-                React.createElement('div',{className:'font-semibold mb-1'},"Zariadenie"),
-                React.createElement('div',null,TEMPLATES[report.type].deviceTitle),
-                React.createElement('div',null,`${TEMPLATES[report.type].snLabel}: `,report.checklist.vyrobneCislo?.val||"")
-              )
-            ),
-
-            /* 4 metriky */
-            React.createElement('div',{className:'px-4 pt-3 grid grid-cols-4 gap-2 text-xs'},
-              ...TEMPLATES[report.type].metrics.map(([k,lab])=>React.createElement(Metric,{key:k,label:lab,value:report.checklist[k]?.val}))
-            ),
-
-            /* tabuľka 16 bodov */
-            React.createElement('div',{className:'px-4 pt-3'},
-              React.createElement('table',null,
-                React.createElement('thead',null,
-                  React.createElement('tr',null,
-                    React.createElement('th',null,'Bod'),
-                    React.createElement('th',null,'OK'),
-                    React.createElement('th',null,'Hodnota / Poznámka')
-                  )
-                ),
-                React.createElement('tbody',null,
-                  TEMPLATES[report.type].checklist.map(([key,label])=>React.createElement('tr',{key},
-                    React.createElement('td',null,label),
-                    React.createElement('td',null, report.checklist[key]?.ok ? '✔' : '—'),
-                    React.createElement('td',null, report.checklist[key]?.val || '')
-                  ))
-                )
-              )
-            ),
-
-            /* podpisy + normy */
-            React.createElement('div',{className:'px-4 pt-3 grid grid-cols-2 gap-4 items-end'},
-              React.createElement(SignBox,{title:'Podpis zákazníka', img:report.podpisZakaznika}),
-              React.createElement(SignBox,{title:'Podpis revízneho technika', img:report.podpisTechnika, stamp:report.podpisTechnikaStampUrl})
-            ),
-
-            React.createElement('div',{className:'px-6 pb-4 text-[10px] text-neutral-600 space-y-1'},
-  React.createElement('div',null,
-    React.createElement('b',null,'Normy a predpisy: '),
-    'STN EN 15502-1/2; STN 38 6441; STN 07 0703'
-  ),
-  React.createElement('div',{className:'italic text-[9px] leading-tight text-neutral-500'},
-    'Ochrana osobných údajov: Údaje uvedené v tejto správe sú spracúvané spoločnosťou Spektra Install s.r.o., IČO 53690036, výhradne na účel vyhotovenia, evidencie a archivácie revíznej dokumentácie podľa platných právnych predpisov a nariadenia GDPR.'
-  )
-)
-          )
+      /* ====== Archív ====== */
+      React.createElement('aside',{className:'p-4 space-y-3 rounded-xl border border-white/10 bg-white/5'},
+        React.createElement('div',{className:'flex items-center justify-between'},
+          React.createElement('h3',{className:'text-lg font-semibold'},'Archív (lokálne)'),
+          React.createElement('span',{className:'text-xs opacity-70'}, `${loadArchive().length} záznamov`)
         ),
-        React.createElement('div',{className:'mt-3 text-center'},
-          React.createElement('button',{className:'btn bg-amber-600 text-white',onClick:sharePDF},"Zdieľať PDF")
+        React.createElement('input',{
+          className:'input w-full', placeholder:'Hľadať číslo / zákazníka / typ…',
+          value:search, onChange:e=>setSearch(e.target.value)
+        }),
+        React.createElement('div',{className:'space-y-2 max-h-[70vh] overflow-auto pr-1'},
+          ...filteredArchive.map(e=> React.createElement('div',{key:e.id, className:'rounded border border-white/10 p-2 bg-white/10'},
+            React.createElement('div',{className:'text-sm font-medium'}, e.cislo,
+              React.createElement('span',{className:'ml-2 text-xs opacity-70'}, `(${e.typ})`)
+            ),
+            React.createElement('div',{className:'text-xs opacity-80 truncate'}, e.zakaznik || '\u2014'),
+            React.createElement('div',{className:'text-xs opacity-60'}, new Date(e.createdAt).toLocaleString()),
+            React.createElement('div',{className:'mt-2 flex gap-2'},
+              React.createElement('button',{className:'btn bg-gray-700', onClick:()=>loadFromArchive(e)},'Otvoriť'),
+              React.createElement('button',{className:'btn bg-amber-700 text-white', onClick:()=>{ setReport(e.data); setTimeout(sharePDF, 0); }},'Zdieľať PDF'),
+              React.createElement('button',{className:'btn bg-rose-700 text-white', onClick:()=>deleteEntry(e.id)},'Zmazať')
+            )
+          ))
+        ),
+        React.createElement('div',{className:'text-xs opacity-70 pt-1'},'Pozn.: Archív je uložený iba v tomto zariadení (LocalStorage). Pre centrálne ukladanie pridáme backend podľa výberu (Cloudflare/Supabase).')
+      )
+    ),
+
+    /* ====== PDF náhľad ====== */
+    React.createElement('section',{className:'p-2 rounded-xl border border-white/10 bg-white/5 mt-6'},
+      React.createElement('div',{id:'pdf-wrapper',className:'mx-auto',style:{background:'#fff',width:'210mm',height:'297mm',overflow:'hidden',display:'flex',justifyContent:'center',alignItems:'flex-start'}},
+        React.createElement('div',{id:'pdf-sheet',className:'sheet'},
+
+          // Hlavička
+          React.createElement('div',{className:'p-4 border-b flex gap-4 items-start'},
+            React.createElement('div',{className:'w-16 h-16 rounded bg-white grid place-items-center overflow-hidden'},
+              React.createElement('img',{src:report.logoUrl,className:'object-contain w-full h-full'})
+            ),
+            React.createElement('div',{className:'flex-1'},
+              React.createElement('div',{className:'text-lg font-bold'},'Spektra Install'),
+              React.createElement('div',{className:'text-[11px] leading-5'},
+                React.createElement('div',null,React.createElement('b',null,'IČO:'),' 53690036'),
+                React.createElement('div',null,React.createElement('b',null,'Sídlo:'),' Rajecká Lesná 98, 01315')
+              )
+            ),
+            React.createElement('div',{className:'text-right'},
+              React.createElement('div',{className:'text-[11px]'},'Číslo správy:'),
+              React.createElement('div',{className:'text-base font-semibold'},report.cislo),
+              React.createElement('div',{className:'text-[11px]'},'Dátum: ',report.datum)
+            )
+          ),
+
+          // Zákazník / Zariadenie
+          React.createElement('div',{className:'px-4 pt-3 grid grid-cols-2 gap-3 text-[12px]'},
+            React.createElement('div',{className:'border rounded p-2 text-[11px] bg-white'},
+              React.createElement('div',{className:'font-semibold mb-1'},'Zákazník'),
+              React.createElement('div',null,report.zakaznik.nazov),
+              React.createElement('div',null,report.zakaznik.adresa),
+              React.createElement('div',null,'IČO: ',report.zakaznik.ico,' • DIČ: ',report.zakaznik.dic,' • e-mail: ',report.zakaznik.email)
+            ),
+            React.createElement('div',{className:'border rounded p-2 text-[11px] bg-white'},
+              React.createElement('div',{className:'font-semibold mb-1'},'Zariadenie'),
+              React.createElement('div',null,TEMPLATES[report.type].deviceTitle),
+              React.createElement('div',null,`${TEMPLATES[report.type].snLabel}: `,report.checklist.vyrobneCislo?.val||'')
+            )
+          ),
+
+          // 4 metriky
+          React.createElement('div',{className:'px-4 pt-3 grid grid-cols-4 gap-2 text-xs'},
+            ...TEMPLATES[report.type].metrics.map(([k,lab])=>React.createElement(Metric,{key:k,label:lab,value:report.checklist[k]?.val}))
+          ),
+
+          // Tabuľka
+          React.createElement('div',{className:'px-4 pt-3'},
+            React.createElement('table',null,
+              React.createElement('thead',null,
+                React.createElement('tr',null,
+                  React.createElement('th',null,'Bod'),
+                  React.createElement('th',null,'OK'),
+                  React.createElement('th',null,'Hodnota / Poznámka')
+                )
+              ),
+              React.createElement('tbody',null,
+                TEMPLATES[report.type].checklist.map(([key,label])=>React.createElement('tr',{key},
+                  React.createElement('td',null,label),
+                  React.createElement('td',null, report.checklist[key]?.ok ? '✔' : '—'),
+                  React.createElement('td',null, report.checklist[key]?.val || '')
+                ))
+              )
+            )
+          ),
+
+          // Podpisy
+          React.createElement('div',{className:'px-4 pt-3 grid grid-cols-2 gap-4 items-end'},
+            React.createElement(SignBox,{title:'Podpis zákazníka', img:report.podpisZakaznika}),
+            React.createElement(SignBox,{title:'Podpis revízneho technika', img:report.podpisTechnika, stamp:report.podpisTechnikaStampUrl})
+          ),
+
+          // Normy + GDPR info
+          React.createElement('div',{className:'px-4 pb-3 text-[10px] text-neutral-600 space-y-1'},
+            React.createElement('div',null,
+              React.createElement('b',null,'Normy a predpisy: '),
+              report.type==='hp'
+                ? 'STN EN 378; Nariadenie (EÚ) 517/2014 (F‑Gas); STN 06 0310; STN EN 14511'
+                : (report.type==='pellet'
+                   ? 'STN EN 303-5; STN 73 4201; STN EN 14785'
+                   : 'STN EN 15502-1/2; STN 38 6441; STN 07 0703')
+            ),
+            React.createElement('div',{className:'italic text-[9px] leading-tight text-neutral-500'},
+              'Ochrana osobných údajov: Údaje uvedené v tejto správe sú spracúvané spoločnosťou Spektra Install s.r.o., IČO 53690036, výhradne na účel vyhotovenia, evidencie a archivácie revíznej dokumentácie podľa platných právnych predpisov a nariadenia GDPR.'
+            )
+          )
         )
+      ),
+      React.createElement('div',{className:'mt-3 text-center'},
+        React.createElement('button',{className:'btn bg-amber-600 text-white',onClick:sharePDF},'Zdieľať PDF')
       )
     )
   );
