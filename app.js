@@ -107,7 +107,7 @@ function SignBox({title,img,stamp}){
   return React.createElement('div',null,
     React.createElement('div',{className:'h-[95px] border rounded p-2 flex items-center justify-center bg-white relative overflow-hidden'},
       stamp && React.createElement('img',{src:stamp,className:'absolute inset-0 m-auto max-h-[90px] opacity-90'}),
-      img ? React.createElement('img',{src:img,className:'relative max-h-[85px] object-contain'}) : React.createElement('span',{className:'text-xs text-neutral-400 relative'},`(${title.toLowerCase()})`)
+      img ? React.createElement('img',{src:img,className:'relative max-h-[85px] object-contain'}) : React.createElement('span',{className:'text-xs text-neutral-400 relative'}, `(${title.toLowerCase()})`)
     ),
     React.createElement('div',{className:'text-center text-xs mt-1'},title)
   );
