@@ -1,5 +1,5 @@
 /* global React, ReactDOM, html2pdf */
-const { useState, useMemo } = React;
+const { useState, useMemo, useEffect, useRef } = React;
 
 /* ===================== Pomôcky ===================== */
 const pad2 = (n)=>String(n).padStart(2,'0');
@@ -25,17 +25,17 @@ function ensureNumberAndBumpCounter(cislo){
   if(p.seq>cur) setSeq(p.year,p.seq); // posuň dopredu len ak je vyššie
   return true;
 }
-
-// Bezpečný klon
 const clone = (o)=>JSON.parse(JSON.stringify(o));
 
 /* ===================== Šablóny ===================== */
-const TEMPLATES = (()=>{
+const TEMPLATES = (()=> {
   const BOILER = {
     label:"Plynový kotol", deviceTitle:"Plynový kotol", snLabel:"Výrobné číslo",
     metrics:[["spaliny","Spaliny"],["tlakZaReg","Tlak plynu za regulátorom"],["voda","Tlak systému / expanzná"],["komin","Komín / ťah"]],
     checklist:[
-      ["vizual","Vizuálna prehliadka"],["vyrobneCislo","Výrobné číslo kotla"],["typKotla","Typ kotla / výkon"],["spaliny","Hodnoty spalín"],["tlakZaReg","Tlak plynu za regulátorom"],["tesnost","Skúška tesnosti plynu"],["poistnyVentil","Poistný ventil"],["bezpPrvky","Bezpečnostné prvky"],["horak","Horák"],["filter","Filtre plynu/vody"],["komin","Dymovod/komín"],["spojky","Armatúry a spoje"],["elektro","Elektrické pripojenie"],["voda","Tlak inšt./expanzka"],["regulator","Regulátor tlaku – SN"],["zaznam","Záznam a poučenie"]
+      ["vizual","Vizuálna prehliadka"],["vyrobneCislo","Výrobné číslo kotla"],["typKotla","Typ kotla / výkon"],["spaliny","Hodnoty spalín"],["tlakZaReg","Tlak plynu za regulátorom"],
+      ["tesnost","Skúška tesnosti plynu"],["poistnyVentil","Poistný ventil"],["bezpPrvky","Bezpečnostné prvky"],["horak","Horák"],["filter","Filtre plynu/vody"],
+      ["komin","Dymovod/komín"],["spojky","Armatúry a spoje"],["elektro","Elektrické pripojenie"],["voda","Tlak inšt./expanzka"],["regulator","Regulátor tlaku – SN"],["zaznam","Záznam a poučenie"]
     ],
     defaults:{
       vizual:{ok:1,val:"Bez korózie, tesné"}, vyrobneCislo:{ok:1,val:"PTC24-2309-0011876"}, typKotla:{ok:1,val:"Protherm Tiger Condens 24/28 KKO • 24 kW"},
@@ -45,12 +45,13 @@ const TEMPLATES = (()=>{
       regulator:{ok:1,val:"RS-2309-11876"}, zaznam:{ok:1,val:"Bez závad, kontrola o 12 mes."}
     }
   };
-
   const HP = {
     label:"Tepelné čerpadlo", deviceTitle:"Tepelné čerpadlo", snLabel:"Sériové číslo (S/N)",
     metrics:[["vody","Voda – VT/RV/ΔT"],["chladivo","Chladiaci okruh – LP/HP"],["elektro","Elektrika"],["unikChladiva","Tesnosť chladiva"]],
     checklist:[
-      ["vizual","Vizuálna prehliadka"],["vyrobneCislo","Sériové číslo (S/N)"],["typKotla","Typ TČ / výkon"],["chladivo","Chladiaci okruh"],["vody","Voda – prietok/ΔT"],["elektro","Elektrika"],["unikChladiva","Tesnosť chladiva"],["kondenzat","Kondenzát"],["cerpadla","Čerpadlá"],["filtre","Filtre"],["poistnyVentil","Poistný ventil"],["expanzka","Expanzka"],["regulator","Regulácia"],["senzory","Senzory"],["odmrazovanie","Odmrazovanie"],["zaznam","Záznam a poučenie"]
+      ["vizual","Vizuálna prehliadka"],["vyrobneCislo","Sériové číslo (S/N)"],["typKotla","Typ TČ / výkon"],["chladivo","Chladiaci okruh"],["vody","Voda – prietok/ΔT"],
+      ["elektro","Elektrika"],["unikChladiva","Tesnosť chladiva"],["kondenzat","Kondenzát"],["cerpadla","Čerpadlá"],["filtre","Filtre"],["poistnyVentil","Poistný ventil"],
+      ["expanzka","Expanzka"],["regulator","Regulácia"],["senzory","Senzory"],["odmrazovanie","Odmrazovanie"],["zaznam","Záznam a poučenie"]
     ],
     defaults:{
       vizual:{ok:1,val:"Bez poškodení"}, vyrobneCislo:{ok:1,val:"HP-24-2023-001122"}, typKotla:{ok:1,val:"Vzduch-voda • 8 kW"},
@@ -60,12 +61,13 @@ const TEMPLATES = (()=>{
       zaznam:{ok:1,val:"Bez závad, kontrola o 12 mes."}
     }
   };
-
   const PELLET = {
     label:"Kotol na pelety", deviceTitle:"Kotol na pelety", snLabel:"Výrobné číslo",
     metrics:[["spaliny","Spaliny (pellet)"],["tah","Ťah komína"],["voda","Tlak systému / expanzka"],["zasobnik","Palivo / zásobník"]],
     checklist:[
-      ["vizual","Vizuálna prehliadka"],["vyrobneCislo","Výrobné číslo"],["typKotla","Typ kotla / výkon"],["spaliny","Spaliny"],["tah","Ťah komína"],["tesnost","Tesnosť dymovodu"],["vymennik","Čistota výmenníka"],["komora","Spaľovacia komora"],["zasobnik","Zásobník peliet"],["zapalovanie","Zapaľovanie"],["senzory","Snímače"],["bezpPrvky","Bezpečnostné prvky"],["hydraulika","Hydraulika"],["voda","Tlak systému / expanzka"],["elektro","Elektrika"],["zaznam","Záznam a poučenie"]
+      ["vizual","Vizuálna prehliadka"],["vyrobneCislo","Výrobné číslo"],["typKotla","Typ kotla / výkon"],["spaliny","Spaliny"],["tah","Ťah komína"],["tesnost","Tesnosť dymovodu"],
+      ["vymennik","Čistota výmenníka"],["komora","Spaľovacia komora"],["zasobnik","Zásobník peliet"],["zapalovanie","Zapaľovanie"],["senzory","Snímače"],["bezpPrvky","Bezpečnostné prvky"],
+      ["hydraulika","Hydraulika"],["voda","Tlak systému / expanzka"],["elektro","Elektrika"],["zaznam","Záznam a poučenie"]
     ],
     defaults:{
       vizual:{ok:1,val:"Čisté, bez korózie"}, vyrobneCislo:{ok:1,val:"PEL-2024-001234"}, typKotla:{ok:1,val:"PelletCondens 15 • 15 kW"},
@@ -102,16 +104,101 @@ function addToArchive(report){
 }
 function deleteFromArchive(id){ saveArchive(loadArchive().filter(e=>e.id!==id)); }
 
-/* ===================== PDF drobnosti ===================== */$1
+/* ===================== PDF drobnosti ===================== */
+function Metric({label,value}){
+  return React.createElement('div',{className:'border rounded p-2 bg-white'},
+    React.createElement('div',{className:'text-[10px] text-neutral-500 mb-1'},label),
+    React.createElement('div',{className:'font-medium text-[12px] leading-tight text-neutral-900'},value||'—')
+  );
+}
+function SignBox({title,img,stamp}){
+  return React.createElement('div',null,
+    React.createElement('div',{className:'h-[90px] border rounded p-2 flex items-center justify-center bg-white relative overflow-hidden'},
+      stamp && React.createElement('img',{src:stamp,className:'absolute inset-0 m-auto max-h-[85px] opacity-90'}),
+      img ? React.createElement('img',{src:img,className:'relative max-h-[80px] object-contain'}) : React.createElement('span',{className:'text-xs text-neutral-400 relative'},`(${title.toLowerCase()})`)
+    ),
+    React.createElement('div',{className:'text-center text-[11px] mt-1'},title)
+  );
+}
+function PdfPreview({report}){
+  const tmpl = TEMPLATES[report.type];
+  return React.createElement('div',{id:'pdf-wrapper',className:'mx-auto',style:{background:'#fff',width:'210mm',height:'297mm',overflow:'hidden',display:'flex',justifyContent:'center',alignItems:'flex-start'}},
+    React.createElement('div',{id:'pdf-sheet',className:'sheet w-[210mm] h-[297mm]'},
+      // hlavička
+      React.createElement('div',{className:'px-6 pt-5 pb-4 border-b flex gap-4 items-start'},
+        React.createElement('div',{className:'w-16 h-16 rounded bg-white grid place-items-center overflow-hidden'},
+          React.createElement('img',{src:report.logoUrl,className:'object-contain w-full h-full'})
+        ),
+        React.createElement('div',{className:'flex-1'},
+          React.createElement('div',{className:'text-lg font-bold'},"Spektra Install"),
+          React.createElement('div',{className:'text-[11px] leading-5'},
+            React.createElement('div',null,React.createElement('b',null,'IČO:'),' 53690036'),
+            React.createElement('div',null,React.createElement('b',null,'Sídlo:'),' Rajecká Lesná 98, 01315')
+          )
+        ),
+        React.createElement('div',{className:'text-right'},
+          React.createElement('div',{className:'text-[11px]'},'Číslo správy:'),
+          React.createElement('div',{className:'text-base font-semibold'},report.cislo),
+          React.createElement('div',{className:'text-[11px]'},'Dátum: ',report.datum)
+        )
+      ),
+      // zákazník / zariadenie
+      React.createElement('div',{className:'px-6 pt-3 grid grid-cols-2 gap-3'},
+        React.createElement('div',{className:'border rounded p-2 text-[11px]'},
+          React.createElement('div',{className:'font-semibold mb-1'},"Zákazník"),
+          React.createElement('div',null,report.zakaznik.nazov),
+          React.createElement('div',null,report.zakaznik.adresa),
+          React.createElement('div',null,'IČO: ',report.zakaznik.ico,' • DIČ: ',report.zakaznik.dic,' • e-mail: ',report.zakaznik.email)
+        ),
+        React.createElement('div',{className:'border rounded p-2 text-[11px]'},
+          React.createElement('div',{className:'font-semibold mb-1'},tmpl.deviceTitle),
+          React.createElement('div',null,tmpl.snLabel,': ',(report.checklist.vyrobneCislo?.val || report.checklist.vyrobneCislo || ''))
+        )
+      ),
+      // 4 metriky
+      React.createElement('div',{className:'px-6 pt-2 grid grid-cols-4 gap-2 text-xs'},
+        ...tmpl.metrics.map(([k,lab]) => React.createElement(Metric,{key:k,label:lab,value:report.checklist[k]?.val}))
+      ),
+      // tabuľka
+      React.createElement('div',{className:'px-6 pt-2'},
+        React.createElement('table',{className:'w-full',style:{tableLayout:'fixed',borderCollapse:'collapse'}},
+          React.createElement('thead',null,
+            React.createElement('tr',null,
+              React.createElement('th',{className:'text-left border p-1 text-[11px]'},'Bod'),
+              React.createElement('th',{className:'text-center border p-1 text-[11px]'},'OK'),
+              React.createElement('th',{className:'text-left border p-1 text-[11px]'},'Hodnota / Poznámka')
+            )
+          ),
+          React.createElement('tbody',null,
+            tmpl.checklist.map(([key,label])=>React.createElement('tr',{key},
+              React.createElement('td',{className:'border p-1 align-top text-[11px]'},label),
+              React.createElement('td',{className:'border p-1 text-center align-top text-[11px]'}, report.checklist[key]?.ok ? '✔' : '—'),
+              React.createElement('td',{className:'border p-1 align-top text-[11px] whitespace-pre-wrap break-words'}, report.checklist[key]?.val || '')
+            ))
+          )
+        )
+      ),
+      // podpisy
+      React.createElement('div',{className:'px-6 pt-2 grid grid-cols-2 gap-4 items-end'},
+        React.createElement(SignBox,{title:'Podpis zákazníka', img:report.podpisZakaznika}),
+        React.createElement(SignBox,{title:'Podpis revízneho technika', img:report.podpisTechnika, stamp:report.podpisTechnikaStampUrl})
+      ),
+      // poznámka
+      React.createElement('div',{className:'px-6 pb-3 pt-1 text-[10px] text-neutral-600'},
+        React.createElement('b',null,'Normy a predpisy: '),' STN EN 15502-1/2; STN 38 6441; STN 07 0703'
+      )
+    )
+  );
+}
 
 /* ===================== Podpisové plátno ===================== */
 function SignaturePad({ title = 'Podpis', onSave, onCancel }){
-  const ref = React.useRef(null);
-  const ctxRef = React.useRef(null);
-  const drawing = React.useRef(false);
-  const last = React.useRef({ x: 0, y: 0 });
+  const ref = useRef(null);
+  const ctxRef = useRef(null);
+  const drawing = useRef(false);
+  const last = useRef({ x: 0, y: 0 });
 
-  React.useEffect(() => {
+  useEffect(() => {
     const cvs = ref.current;
     const dpr = window.devicePixelRatio || 1;
     const r = cvs.getBoundingClientRect();
@@ -151,8 +238,20 @@ function SignaturePad({ title = 'Podpis', onSave, onCancel }){
 }
 
 /* ===================== App ===================== */
-function App(){$1const [showSigZ, setShowSigZ] = useState(false);
+function App(){
+  const [report, setReport] = useState(()=>DEFAULT_REPORT('boiler'));
+  const [showSigZ, setShowSigZ] = useState(false);
   const [showSigT, setShowSigT] = useState(false);
+  const [search, setSearch] = useState('');
+  const [seqYear, setSeqYear] = useState(new Date().getFullYear());
+  const [seqVal, setSeqVal] = useState(getSeq(new Date().getFullYear()));
+
+  // istota: ak by sa datum nenaplnil
+  useEffect(() => {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(report.datum)) {
+      setReport(r => ({ ...r, datum: todayStr() }));
+    }
+  }, []); // run once
 
   const archive = useMemo(()=> loadArchive(), [report.cislo]);
 
@@ -165,19 +264,71 @@ function App(){$1const [showSigZ, setShowSigZ] = useState(false);
 
     const wrapper = document.getElementById('pdf-wrapper');
     const sheet   = document.getElementById('pdf-sheet');
+
+    // kompaktné medzery len počas generovania (ak máš v CSS .pdf-compact, aktivuje sa)
     sheet.classList.add('pdf-compact');
-    const A4W=794, A4H=1123;
-    const prev={transform:wrapper.style.transform,transformOrigin:wrapper.style.transformOrigin,width:wrapper.style.width,height:wrapper.style.height};
-    const realW=Math.ceil(wrapper.scrollWidth), realH=Math.ceil(wrapper.scrollHeight);
-    if(realW>A4W || realH>A4H){ const s=Math.min(A4W/realW, A4H/realH); wrapper.style.transformOrigin='top left'; wrapper.style.transform=`scale(${s})`; wrapper.style.width=`${A4W}px`; wrapper.style.height=`${A4H}px`; }
-    try{
-      const worker = html2pdf().set({ margin:0, image:{type:'jpeg',quality:0.98}, html2canvas:{scale:2,useCORS:true,allowTaint:true,scrollY:0,backgroundColor:'#fff',width:A4W,height:A4H,windowWidth:A4W,windowHeight:A4H,letterRendering:true}, jsPDF:{unit:'mm',format:'a4',orientation:'portrait'}, pagebreak:{mode:[]} }).from(wrapper);
+
+    // čakaj na fonty/obrázky (ak treba)
+    if (document.fonts && document.fonts.ready) { try { await document.fonts.ready; } catch {} }
+    const imgs = wrapper.querySelectorAll('img');
+    await Promise.all(Array.from(imgs).map(img => img.complete ? null : new Promise(r => { img.onload = img.onerror = r; })));
+
+    // A4 v pixeloch (96 dpi)
+    const A4W = 794, A4H = 1123;
+    // škálovanie, ak by náhodou presahovalo
+    const prev = { transform: wrapper.style.transform, transformOrigin: wrapper.style.transformOrigin, width: wrapper.style.width, height: wrapper.style.height };
+    const realW = Math.ceil(wrapper.scrollWidth), realH = Math.ceil(wrapper.scrollHeight);
+    if (realW > A4W || realH > A4H) {
+      const scale = Math.min(A4W/realW, A4H/realH);
+      wrapper.style.transformOrigin = 'top left';
+      wrapper.style.transform = `scale(${scale})`;
+      wrapper.style.width  = `${A4W}px`;
+      wrapper.style.height = `${A4H}px`;
+    }
+
+    try {
+      const worker = html2pdf().set({
+        margin: 0,
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: {
+          scale: 2, useCORS: true, allowTaint: true, scrollY: 0, backgroundColor: '#ffffff',
+          width: A4W, height: A4H, windowWidth: A4W, windowHeight: A4H, letterRendering: true
+        },
+        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+        pagebreak: { mode: [] }
+      }).from(wrapper);
+
       const pdf = await worker.toPdf().get('pdf');
-      const blob = new Blob([pdf.output('arraybuffer')],{type:'application/pdf'});
+      const blob = new Blob([pdf.output('arraybuffer')], { type: 'application/pdf' });
       const filename = `Revízna_sprava-${report.cislo}.pdf`;
-      if(navigator.canShare){ const file = new File([blob], filename, { type:'application/pdf' }); if(navigator.canShare({files:[file]})){ try{ await navigator.share({ files:[file], title:'Revízna správa', text:'PDF (1× A4)' }); sheet.classList.remove('pdf-compact'); return; }catch(_){} } }
-      const url = URL.createObjectURL(blob); const w = window.open(url,'_blank'); if(!w){ const a=document.createElement('a'); a.href=url; a.download=filename; document.body.appendChild(a); a.click(); a.remove(); } setTimeout(()=>URL.revokeObjectURL(url),1500);
-    } finally { sheet.classList.remove('pdf-compact'); wrapper.style.transform=prev.transform; wrapper.style.transformOrigin=prev.transformOrigin; wrapper.style.width=prev.width; wrapper.style.height=prev.height; }
+
+      // Share Sheet (Android/iOS – OneDrive/Mail/Tlač)
+      if (navigator.canShare) {
+        const file = new File([blob], filename, { type: 'application/pdf' });
+        if (navigator.canShare({ files: [file] })) {
+          try {
+            await navigator.share({ files: [file], title: 'Revízna správa', text: 'PDF (1× A4)' });
+            sheet.classList.remove('pdf-compact');
+            return;
+          } catch (_) { /* používateľ zrušil */ }
+        }
+      }
+
+      // Fallback: otvor PDF do novej karty alebo stiahni
+      const url = URL.createObjectURL(blob);
+      const w = window.open(url,'_blank');
+      if (!w) {
+        const a=document.createElement('a'); a.href=url; a.download=filename; document.body.appendChild(a); a.click(); a.remove();
+      }
+      setTimeout(()=>URL.revokeObjectURL(url),1500);
+
+    } finally {
+      sheet.classList.remove('pdf-compact');
+      wrapper.style.transform       = prev.transform;
+      wrapper.style.transformOrigin = prev.transformOrigin;
+      wrapper.style.width           = prev.width;
+      wrapper.style.height          = prev.height;
+    }
   };
 
   // --- Archív akcie ---
@@ -278,8 +429,10 @@ function App(){$1const [showSigZ, setShowSigZ] = useState(false);
       )
     ),
 
-    /* ====== PDF náhľad ====== */
-    React.createElement('section',{className:'p-2 rounded-xl border border-white/10 bg-white/5 mt-6'},$1),
+    /* ====== PDF náhľad (presná A4 plocha) ====== */
+    React.createElement('section',{className:'p-2 rounded-xl border border-white/10 bg-white/5 mt-6'},
+      React.createElement(PdfPreview,{report})
+    ),
 
     // podpisové modály
     showSigZ && React.createElement(SignaturePad,{ title:'Podpis zákazníka', onSave:(png)=>{ setReport(r=>({...r,podpisZakaznika:png})); setShowSigZ(false); }, onCancel:()=>setShowSigZ(false) }),
