@@ -70,17 +70,17 @@ function SignaturePad({ title="Podpis", onSave, onCancel }){
     const cvs=ref.current, dpr=window.devicePixelRatio||1;
     const r=cvs.getBoundingClientRect(); cvs.width=r.width*dpr; cvs.height=r.height*dpr;
     const ctx=cvs.getContext('2d'); ctx.scale(dpr,dpr); ctx.lineWidth=2; ctx.lineCap='round'; ctx.strokeStyle='#111'; ctxRef.current=ctx;
-    const get=(e)=>{const t=e.touches?e.touches[0]:e;const cr=cvs.getBoundingClientRect();return{x:t.clientX-cr.left,y:t.clientY-cr.top};};
-    const start=(e)=>{e.preventDefault();drawing.current=true;last.current=get(e);};
-    const move=(e)=>{if(!drawing.current)return;e.preventDefault();const p=get(e),ctx=ctxRef.current;ctx.beginPath();ctx.moveTo(last.current.x,last.current.y);ctx.lineTo(p.x,p.y);ctx.stroke();last.current=p;};
-    const end=(e)=>{e.preventDefault();drawing.current=false;};
+    const get=(e)=>{const t=e.touches?e.touches[0]:e;const cr=cvs.getBoundingClientRect();return{x:t.clientX-cr.left,y:t.clientY-cr.top}};
+    const start=(e)=>{e.preventDefault();drawing.current=true;last.current=get(e)};
+    const move=(e)=>{if(!drawing.current)return;e.preventDefault();const p=get(e),ctx=ctxRef.current;ctx.beginPath();ctx.moveTo(last.current.x,last.current.y);ctx.lineTo(p.x,p.y);ctx.stroke();last.current=p};
+    const end=(e)=>{e.preventDefault();drawing.current=false};
     const opt={passive:false};
     cvs.addEventListener('mousedown',start,opt); cvs.addEventListener('mousemove',move,opt); window.addEventListener('mouseup',end,opt);
     cvs.addEventListener('touchstart',start,opt); cvs.addEventListener('touchmove',move,opt); cvs.addEventListener('touchend',end,opt);
     return()=>{cvs.removeEventListener('mousedown',start,opt);cvs.removeEventListener('mousemove',move,opt);window.removeEventListener('mouseup',end,opt);
-      cvs.removeEventListener('touchstart',start,opt);cvs.removeEventListener('touchmove',move,opt);cvs.removeEventListener('touchend',end,opt);};
+      cvs.removeEventListener('touchstart',start,opt);cvs.removeEventListener('touchmove',move,opt);cvs.removeEventListener('touchend',end,opt)};
   },[]);
-  const clear=()=>{const cvs=ref.current,ctx=ctxRef.current;ctx.clearRect(0,0,cvs.width,cvs.height);};
+  const clear=()=>{const cvs=ref.current,ctx=ctxRef.current;ctx.clearRect(0,0,cvs.width,cvs.height)};
   return React.createElement('div',{className:'fixed inset-0 bg-black/60 grid place-items-center',onClick:onCancel},
     React.createElement('div',{className:'bg-white rounded-2xl w-[90vw] max-w-lg p-4',onClick:e=>e.stopPropagation()},
       React.createElement('div',{className:'text-lg font-semibold mb-2'},title),
@@ -131,20 +131,23 @@ function App(){
     ...r, checklist: { ...r.checklist, [key]: { ...(r.checklist[key]||{}), ...patch } }
   }));
 
-  /* ---------- PDF export – 1x A4 ---------- */
-  const exportPDF = async () => {
+  /* ---------- SHARE PDF (OneDrive/Mail/Tlač) – 1x A4 ---------- */
+  const sharePDF = async () => {
     const wrapper = document.getElementById('pdf-wrapper');
     const sheet   = document.getElementById('pdf-sheet');
 
-    // kompaktné medzery len počas exportu
+    // kompaktné medzery len počas generovania
     sheet.classList.add('pdf-compact');
 
-    // fonts & images
-    if (document.fonts && document.fonts.ready) { try{ await document.fonts.ready; }catch{} }
+    // čakaj na fonty/obrázky
+    if (document.fonts && document.fonts.ready) { try { await document.fonts.ready; } catch {} }
     const imgs = wrapper.querySelectorAll('img');
     await Promise.all(Array.from(imgs).map(img => img.complete ? null : new Promise(r => { img.onload = img.onerror = r; })));
 
-    const A4W = 794, A4H = 1123;        // 96dpi
+    const A4W = 794, A4H = 1123; // 96dpi
+    const filename = `Revízna_sprava-${(typeof report?.cislo === 'string' ? report.cislo : 'report')}.pdf`;
+
+    // škálovanie, ak by náhodou presahovalo
     const prev = { transform: wrapper.style.transform, transformOrigin: wrapper.style.transformOrigin, width: wrapper.style.width, height: wrapper.style.height };
     const realW = Math.ceil(wrapper.scrollWidth), realH = Math.ceil(wrapper.scrollHeight);
     if (realW > A4W || realH > A4H) {
@@ -155,21 +158,51 @@ function App(){
       wrapper.style.height = `${A4H}px`;
     }
 
-    try{
-      await html2pdf().set({
-        margin:0,
-        filename:`Revízna_sprava-${report.cislo}.pdf`,
-        image:{type:'jpeg',quality:0.98},
-        html2canvas:{scale:2,useCORS:true,allowTaint:true,scrollY:0,backgroundColor:'#ffffff',width:A4W,height:A4H,windowWidth:A4W,windowHeight:A4H,letterRendering:true},
-        jsPDF:{unit:'mm',format:'a4',orientation:'portrait'},
-        pagebreak:{mode:[]}
-      }).from(wrapper).save();
+    try {
+      // PDF ako Blob
+      const worker = html2pdf().set({
+        margin: 0,
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: {
+          scale: 2, useCORS: true, allowTaint: true, scrollY: 0, backgroundColor: '#ffffff',
+          width: A4W, height: A4H, windowWidth: A4W, windowHeight: A4H, letterRendering: true
+        },
+        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+        pagebreak: { mode: [] }
+      }).from(wrapper);
+
+      const pdf = await worker.toPdf().get('pdf');
+      const blob = new Blob([pdf.output('arraybuffer')], { type: 'application/pdf' });
+
+      // 1) Share Sheet (Android/iOS – OneDrive/Mail/Tlač)
+      if (navigator.canShare) {
+        const file = new File([blob], filename, { type: 'application/pdf' });
+        if (navigator.canShare({ files: [file] })) {
+          try {
+            await navigator.share({ files: [file], title: 'Revízna správa', text: 'Revízna správa v PDF (1× A4)' });
+            return;
+          } catch (_) { /* zrušené používateľom */ }
+        }
+      }
+
+      // 2) Fallback: otvor PDF do novej karty + skús tlač
+      const url = URL.createObjectURL(blob);
+      const w = window.open(url, '_blank');
+      if (w) { setTimeout(() => { try { w.focus(); w.print(); } catch {} }, 400); }
+      else {
+        // 3) Posledný fallback: stiahni súbor
+        const a = document.createElement('a');
+        a.href = url; a.download = filename; document.body.appendChild(a); a.click(); a.remove();
+      }
+      setTimeout(() => URL.revokeObjectURL(url), 2000);
+
     } finally {
+      // upratať do pôvodného stavu
       sheet.classList.remove('pdf-compact');
-      wrapper.style.transform       = prev.transform;
-      wrapper.style.transformOrigin = prev.transformOrigin;
-      wrapper.style.width           = prev.width;
-      wrapper.style.height          = prev.height;
+      wrapper.style.transform       = prev?.transform || '';
+      wrapper.style.transformOrigin = prev?.transformOrigin || '';
+      wrapper.style.width           = prev?.width || '';
+      wrapper.style.height          = prev?.height || '';
     }
   };
 
@@ -244,7 +277,7 @@ function App(){
         React.createElement('div',{className:'flex gap-2 flex-wrap pt-2'},
           React.createElement('button',{className:'btn bg-gray-700',onClick:()=>setShowSigZ(true)},"✍️ Podpis zákazníka"),
           React.createElement('button',{className:'btn bg-gray-700',onClick:()=>setShowSigT(true)},"✍️ Podpis technika"),
-          React.createElement('button',{className:'btn bg-amber-600 text-white',onClick:exportPDF},"Export PDF")
+          React.createElement('button',{className:'btn bg-amber-600 text-white',onClick:sharePDF},"Zdieľať PDF")
         )
       ),
 
