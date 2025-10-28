@@ -3,35 +3,8 @@ const { useEffect, useRef, useState } = React;
 
 /* ---------- Pomôcky ---------- */
 const pad2 = (n)=>String(n).padStart(2,"0");
-const todayStr = ()=>{
-  const d=new Date(); return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`;
-};
-const ymd = (d)=>`${d.getFullYear()}${pad2(d.getMonth()+1)}${pad2(d.getDate())}`;
-
-/* číslovanie RS-YYYYMMDD-#### s lokálnym počítadlom */
-const NEXT_KEY = "rs.nextSerial";   // ďalšie poradové číslo (4-ciferné)
-const DATE_KEY = "rs.lastDate";     // posledný deň, pre reset počítadla
-function getNextSerialFor(dateStr){
-  const today = dateStr || todayStr();
-  const todayKey = today.replaceAll("-","");
-  const last = localStorage.getItem(DATE_KEY);
-  let next = parseInt(localStorage.getItem(NEXT_KEY)||"1",10);
-  if (last !== todayKey){ next = 1; localStorage.setItem(DATE_KEY, todayKey); }
-  return next;
-}
-function bumpSerial(dateStr){
-  const todayKey = (dateStr||todayStr()).replaceAll("-","");
-  const last = localStorage.getItem(DATE_KEY);
-  if (last !== todayKey){ localStorage.setItem(DATE_KEY, todayKey); localStorage.setItem(NEXT_KEY, String(2)); }
-  else {
-    const n = parseInt(localStorage.getItem(NEXT_KEY)||"1",10);
-    localStorage.setItem(NEXT_KEY, String(n+1));
-  }
-}
-function makeReportNo(dateStr, serial){
-  const d = new Date(dateStr || todayStr());
-  return `RS-${ymd(d)}-${String(serial).padStart(4,"0")}`;
-}
+const todayStr = ()=>{ const d=new Date(); return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`; };
+const genReportNo = ()=>{ const d=new Date(); return `RS-${d.getFullYear()}${pad2(d.getMonth()+1)}${pad2(d.getDate())}-${pad2(d.getHours())}${pad2(d.getMinutes())}`; };
 
 /* 16 bodov – kľúče musia sedieť s DEFAULT_CHECKLIST */
 const CHECKLIST = [
@@ -72,31 +45,22 @@ const DEFAULT_CHECKLIST = {
   zaznam: { ok: true, val: "Bez závad. Poučenie obsluhy; ďalšia kontrola o 12 mes." }
 };
 
-/* inline logo + pečiatka (data-URI PNG) */
-const DATA_LOGO = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAJYAAACWCAYAAAB..."; // skrátené, môžeš nechať takto; logo sa dá neskôr nahradiť URL
-const DATA_STAMP = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAHgAAAB4CAYAAAB..."; // skrátené
-
-const DEFAULT = () => {
-  const dStr = todayStr();
-  const serial = getNextSerialFor(dStr);
-  return {
-    cislo: makeReportNo(dStr, serial),
-    datum: dStr,
-    manualSerial: serial, // editovateľné pole
-    zakaznik: {
-      nazov: "Bytový dom Hurbanova 12",
-      adresa: "Hurbanova 12, 015 01 Rajec",
-      ico: "36789012",
-      dic: "2023456789",
-      email: "spravca@bd-hurbanova.sk",
-    },
-    checklist: { ...DEFAULT_CHECKLIST },
-    logoUrl: DATA_LOGO,
-    podpisTechnikaStampUrl: DATA_STAMP,
-    podpisZakaznika: "",
-    podpisTechnika: "",
-  };
-};
+const DEFAULT = () => ({
+  cislo: genReportNo(),
+  datum: todayStr(),
+  zakaznik: {
+    nazov: "Bytový dom Hurbanova 12",
+    adresa: "Hurbanova 12, 015 01 Rajec",
+    ico: "36789012",
+    dic: "2023456789",
+    email: "spravca@bd-hurbanova.sk",
+  },
+  checklist: { ...DEFAULT_CHECKLIST },
+  logoUrl: "./assets/logo-spektrainstall.png",
+  podpisTechnikaStampUrl: "./assets/podpis-technika.png",
+  podpisZakaznika: "",
+  podpisTechnika: "",
+});
 
 /* ------------- podpis plátno ------------- */
 function SignaturePad({ title="Podpis", onSave, onCancel }){
@@ -117,14 +81,14 @@ function SignaturePad({ title="Podpis", onSave, onCancel }){
       cvs.removeEventListener('touchstart',start,opt);cvs.removeEventListener('touchmove',move,opt);cvs.removeEventListener('touchend',end,opt);};
   },[]);
   const clear=()=>{const cvs=ref.current,ctx=ctxRef.current;ctx.clearRect(0,0,cvs.width,cvs.height);};
-  return React.createElement('div',{className:'fixed inset-0 bg-black/60 grid place-items-center z-50',onClick:onCancel},
-    React.createElement('div',{className:'bg-white rounded-2xl w-[92vw] max-w-lg p-4',onClick:e=>e.stopPropagation()},
-      React.createElement('div',{className:'text-lg font-semibold mb-2 text-neutral-900'},title),
+  return React.createElement('div',{className:'fixed inset-0 bg-black/60 grid place-items-center',onClick:onCancel},
+    React.createElement('div',{className:'bg-white rounded-2xl w-[90vw] max-w-lg p-4',onClick:e=>e.stopPropagation()},
+      React.createElement('div',{className:'text-lg font-semibold mb-2'},title),
       React.createElement('canvas',{ref:ref,className:'w-full h-40 rounded border'}),
       React.createElement('div',{className:'mt-3 flex justify-between'},
-        React.createElement('button',{className:'btn bg-neutral-200 text-neutral-900',onClick:clear},"Vymazať"),
+        React.createElement('button',{className:'btn bg-gray-200',onClick:clear},"Vymazať"),
         React.createElement('div',null,
-          React.createElement('button',{className:'btn bg-neutral-200 text-neutral-900 mr-2',onClick:onCancel},"Zrušiť"),
+          React.createElement('button',{className:'btn bg-gray-200 mr-2',onClick:onCancel},"Zrušiť"),
           React.createElement('button',{className:'btn bg-emerald-600 text-white',onClick:()=>onSave(ref.current.toDataURL('image/png'))},"Uložiť podpis")
         )
       )
@@ -132,16 +96,16 @@ function SignaturePad({ title="Podpis", onSave, onCancel }){
   );
 }
 
-/* drobné pod-komponenty pre PDF */
+/* ------------- PDF drobnosti ------------- */
 function Metric({label,value}){
   return React.createElement('div',{className:'border rounded p-2 bg-white'},
-    React.createElement('div',{className:'metric-label text-[10px] text-neutral-500 mb-1'},label),
-    React.createElement('div',{className:'metric-value font-medium text-[12px] leading-tight text-neutral-900'},value||'—')
+    React.createElement('div',{className:'text-[10px] text-neutral-500 mb-1'},label),
+    React.createElement('div',{className:'font-medium text-[12px] leading-tight text-neutral-900'},value||'—')
   );
 }
 function SignBox({title,img,stamp}){
   return React.createElement('div',null,
-    React.createElement('div',{className:'sign-box h-[100px] border rounded p-2 flex items-center justify-center bg-white relative overflow-hidden'},
+    React.createElement('div',{className:'h-[95px] border rounded p-2 flex items-center justify-center bg-white relative overflow-hidden'},
       stamp && React.createElement('img',{src:stamp,className:'absolute inset-0 m-auto max-h-[90px] opacity-90'}),
       img ? React.createElement('img',{src:img,className:'relative max-h-[85px] object-contain'}) : React.createElement('span',{className:'text-xs text-neutral-400 relative'},`(${title.toLowerCase()})`)
     ),
@@ -155,35 +119,32 @@ function App(){
   const [showSigZ,setShowSigZ]=useState(false);
   const [showSigT,setShowSigT]=useState(false);
 
-  // ak zmeníme dátum alebo serial, prepočíta sa číslo správy
-  useEffect(()=>{
-    const d = report.datum || todayStr();
-    const cislo = makeReportNo(d, report.manualSerial || 1);
-    setReport(r=> r.cislo === cislo ? r : ({...r, cislo}));
-    // eslint-disable-next-line
-  }, [report.datum, report.manualSerial]);
+  // istota: ak by sa datum nenaplnil, doplň ho
+  useEffect(() => {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(report.datum)) {
+      setReport(r => ({ ...r, datum: todayStr() }));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const setChecklistVal=(key, patch)=> setReport(r=>({
     ...r, checklist: { ...r.checklist, [key]: { ...(r.checklist[key]||{}), ...patch } }
   }));
 
-  /* ---------- SHARE PDF – 1x A4 ---------- */
-  const sharePDF = async () => {
+  /* ---------- PDF export – 1x A4 ---------- */
+  const exportPDF = async () => {
     const wrapper = document.getElementById('pdf-wrapper');
     const sheet   = document.getElementById('pdf-sheet');
 
-    // kompaktné medzery len počas generovania
+    // kompaktné medzery len počas exportu
     sheet.classList.add('pdf-compact');
 
-    // čakaj na fonty/obrázky
-    if (document.fonts && document.fonts.ready) { try { await document.fonts.ready; } catch {} }
+    // fonts & images
+    if (document.fonts && document.fonts.ready) { try{ await document.fonts.ready; }catch{} }
     const imgs = wrapper.querySelectorAll('img');
     await Promise.all(Array.from(imgs).map(img => img.complete ? null : new Promise(r => { img.onload = img.onerror = r; })));
 
-    const A4W = 794, A4H = 1123; // 96dpi
-    const filename = `Revízna_sprava-${report.cislo}.pdf`;
-
-    // škálovanie, ak by presahovalo
+    const A4W = 794, A4H = 1123;        // 96dpi
     const prev = { transform: wrapper.style.transform, transformOrigin: wrapper.style.transformOrigin, width: wrapper.style.width, height: wrapper.style.height };
     const realW = Math.ceil(wrapper.scrollWidth), realH = Math.ceil(wrapper.scrollHeight);
     if (realW > A4W || realH > A4H) {
@@ -194,89 +155,72 @@ function App(){
       wrapper.style.height = `${A4H}px`;
     }
 
-    try {
-      // PDF -> Blob
-      const worker = html2pdf().set({
-        margin: 0,
-        image: { type: 'jpeg', quality: 0.98 },
-        html2canvas: { scale: 2, useCORS: true, allowTaint: true, scrollY: 0, backgroundColor: '#ffffff',
-          width: A4W, height: A4H, windowWidth: A4W, windowHeight: A4H, letterRendering: true },
-        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
-        pagebreak: { mode: [] }
-      }).from(wrapper);
-
-      const pdf = await worker.toPdf().get('pdf');
-      const blob = new Blob([pdf.output('arraybuffer')], { type: 'application/pdf' });
-
-      // Share Sheet (OneDrive/Mail/Tlač)
-      let shared = false;
-      if (navigator.canShare) {
-        const file = new File([blob], filename, { type: 'application/pdf' });
-        if (navigator.canShare({ files: [file] })) {
-          try {
-            await navigator.share({ files: [file], title: 'Revízna správa', text: 'Revízna správa v PDF (1× A4)' });
-            shared = true;
-          } catch {}
-        }
-      }
-      if (!shared){
-        // fallback: otvor do novej karty + skúsiť tlač
-        const url = URL.createObjectURL(blob);
-        const w = window.open(url, '_blank');
-        if (w) { setTimeout(() => { try { w.focus(); w.print(); } catch {} }, 400); }
-        else {
-          const a = document.createElement('a');
-          a.href = url; a.download = filename; document.body.appendChild(a); a.click(); a.remove();
-        }
-        setTimeout(() => URL.revokeObjectURL(url), 2000);
-      }
-
-      // ak zdieľanie bežalo (alebo fallback), posuň poradové číslo
-      bumpSerial(report.datum);
-      const next = getNextSerialFor(report.datum);
-      setReport(r=>({ ...r, manualSerial: next, cislo: makeReportNo(r.datum, next) }));
-
+    try{
+      await html2pdf().set({
+        margin:0,
+        filename:`Revízna_sprava-${report.cislo}.pdf`,
+        image:{type:'jpeg',quality:0.98},
+        html2canvas:{scale:2,useCORS:true,allowTaint:true,scrollY:0,backgroundColor:'#ffffff',width:A4W,height:A4H,windowWidth:A4W,windowHeight:A4H,letterRendering:true},
+        jsPDF:{unit:'mm',format:'a4',orientation:'portrait'},
+        pagebreak:{mode:[]}
+      }).from(wrapper).save();
     } finally {
       sheet.classList.remove('pdf-compact');
-      wrapper.style.transform       = prev?.transform || '';
-      wrapper.style.transformOrigin = prev?.transformOrigin || '';
-      wrapper.style.width           = prev?.width || '';
-      wrapper.style.height          = prev?.height || '';
+      wrapper.style.transform       = prev.transform;
+      wrapper.style.transformOrigin = prev.transformOrigin;
+      wrapper.style.width           = prev.width;
+      wrapper.style.height          = prev.height;
     }
   };
 
-  /* ---------- UI helpers ---------- */
-  const Input = (props)=>React.createElement('input',{...props,className:`input ${props.className||""}`});
+  /* ---------- UI ---------- */
+  const Input = (props)=>React.createElement('input',{...props,className:`input w-full ${props.className||""}`});
 
   return React.createElement('div',{className:'max-w-6xl mx-auto px-4 py-6'},
     React.createElement('div',{className:'grid grid-cols-1 lg:grid-cols-2 gap-6'},
+
       /* --------- ĽAVO: EDITOR --------- */
       React.createElement('section',{className:'card p-4 space-y-4'},
         React.createElement('h2',{className:'text-xl font-semibold'},"Údaje"),
         React.createElement('div',{className:'grid grid-cols-1 md:grid-cols-2 gap-3'},
+
           React.createElement('label', null, "Názov",
-            Input({ value: report.zakaznik.nazov, onChange:e=>setReport(r=>({...r, zakaznik:{...r.zakaznik, nazov:e.target.value}})) })
+            Input({ value: report.zakaznik.nazov,
+              onChange:e=>setReport(r=>({...r, zakaznik:{...r.zakaznik, nazov:e.target.value}}))
+            })
           ),
+
           React.createElement('label', null, "Adresa",
-            Input({ value: report.zakaznik.adresa, onChange:e=>setReport(r=>({...r, zakaznik:{...r.zakaznik, adresa:e.target.value}})) })
+            Input({ value: report.zakaznik.adresa,
+              onChange:e=>setReport(r=>({...r, zakaznik:{...r.zakaznik, adresa:e.target.value}}))
+            })
           ),
+
           React.createElement('label', null, "IČO",
-            Input({ value: report.zakaznik.ico, onChange:e=>setReport(r=>({...r, zakaznik:{...r.zakaznik, ico:e.target.value}})) })
+            Input({ value: report.zakaznik.ico,
+              onChange:e=>setReport(r=>({...r, zakaznik:{...r.zakaznik, ico:e.target.value}}))
+            })
           ),
+
           React.createElement('label', null, "DIČ",
-            Input({ value: report.zakaznik.dic, onChange:e=>setReport(r=>({...r, zakaznik:{...r.zakaznik, dic:e.target.value}})) })
+            Input({ value: report.zakaznik.dic,
+              onChange:e=>setReport(r=>({...r, zakaznik:{...r.zakaznik, dic:e.target.value}}))
+            })
           ),
-          React.createElement('label',{className:'md:col-span-2'}, "E-mail",
-            Input({ type:'email', value: report.zakaznik.email, onChange:e=>setReport(r=>({...r, zakaznik:{...r.zakaznik, email:e.target.value}})) })
+
+          React.createElement('label', { className:'md:col-span-2' }, "E-mail",
+            Input({ type:'email', value: report.zakaznik.email,
+              onChange:e=>setReport(r=>({...r, zakaznik:{...r.zakaznik, email:e.target.value}}))
+            })
           ),
-          React.createElement('label',{className:'md:col-span-2'}, "Dátum revízie",
-            React.createElement('input',{ type:'date', className:'input w-full', value:report.datum, onChange:e=>setReport(r=>({...r, datum:e.target.value})) })
-          ),
-          React.createElement('label', null, "Poradové číslo (úprava pred exportom)",
-            Input({ type:'number', min:1, value:report.manualSerial, onChange:e=>setReport(r=>({...r, manualSerial: Math.max(1, Number(e.target.value||1))})) })
-          ),
-          React.createElement('div',{className:'text-sm text-neutral-400 self-center'},"Číslo správy: ",
-            React.createElement('span',{className:'font-semibold text-neutral-200'}, report.cislo)
+
+          React.createElement('label', { className:'md:col-span-2' }, "Dátum revízie",
+            React.createElement('input', {
+              type: 'date',
+              className: 'input w-full',
+              value: report.datum,                // YYYY-MM-DD
+              onChange: e => setReport(r => ({ ...r, datum: e.target.value }))
+            })
           )
         ),
 
@@ -300,21 +244,21 @@ function App(){
         React.createElement('div',{className:'flex gap-2 flex-wrap pt-2'},
           React.createElement('button',{className:'btn bg-gray-700',onClick:()=>setShowSigZ(true)},"✍️ Podpis zákazníka"),
           React.createElement('button',{className:'btn bg-gray-700',onClick:()=>setShowSigT(true)},"✍️ Podpis technika"),
-          React.createElement('button',{className:'btn bg-amber-600 text-white',onClick:sharePDF},"Zdieľať PDF")
+          React.createElement('button',{className:'btn bg-amber-600 text-white',onClick:exportPDF},"Export PDF")
         )
       ),
 
       /* --------- PRAVO: PDF PREVIEW --------- */
       React.createElement('section',{className:'card p-2'},
-        React.createElement('div',{id:'pdf-wrapper',className:'mx-auto'},
-          React.createElement('div',{id:'pdf-sheet',className:'sheet'},
+        React.createElement('div',{id:'pdf-wrapper',className:'mx-auto',style:{background:'#fff',width:'210mm',height:'297mm',overflow:'hidden',display:'flex',justifyContent:'center',alignItems:'flex-start'}},
+          React.createElement('div',{id:'pdf-sheet',className:'sheet w-[210mm] h-[297mm]'},
             /* hlavička */
             React.createElement('div',{className:'p-6 border-b flex gap-4 items-start'},
               React.createElement('div',{className:'w-20 h-20 rounded bg-white grid place-items-center overflow-hidden'},
                 React.createElement('img',{src:report.logoUrl,className:'object-contain w-full h-full'})
               ),
               React.createElement('div',{className:'flex-1'},
-                React.createElement('div',{className:'text-xl font-bold'}, "Spektra Install"),
+                React.createElement('div',{className:'text-xl font-bold'},"Spektra Install"),
                 React.createElement('div',{className:'text-xs leading-5'},
                   React.createElement('div',null,React.createElement('b',null,'IČO:'),' 53690036'),
                   React.createElement('div',null,React.createElement('b',null,'Sídlo:'),' Rajecká Lesná 98, 01315')
