@@ -1,406 +1,49 @@
-# Súbory na výmenu (komplet opravy)
-
-Nižšie sú štyri súbory pripravené na priamu výmenu v projekte. Opravujú chybu **$1 is not defined**, 404 ikony a zjednocujú favicon/PWA ikony. Cache PWA je navýšená, aby sa aktualizácia načítala.
-
----
-
-## index.html
-
-```html
 <!doctype html>
 <html lang="sk">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Revízna správa – Spektra Install</title>
-
-  <!-- Favicony a PWA ikony (absolútne cesty) -->
-  <link rel="icon" type="image/png" sizes="32x32" href="/icons/logo-32.png">
-  <link rel="icon" type="image/png" sizes="48x48" href="/icons/logo-48.png">
-  <link rel="apple-touch-icon" href="/icons/logo-192.png">
-  <link rel="manifest" href="/manifest.webmanifest">
-
+  <link rel="icon" type="image/png" sizes="32x32" href="./assets/logo-32.png?v=3">
+  <link rel="icon" type="image/png" sizes="48x48" href="./assets/logo-48.png?v=3">
+  <link rel="apple-touch-icon" sizes="180x180" href="./icons/icon-192.png?v=3">
+  <link rel="manifest" href="./manifest.webmanifest?v=3" />
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
   <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
   <style>
-    body{background:#0b0f13;color:#e5e7eb;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,Noto Sans,sans-serif}
-    .card{background:#111827;border:1px solid #1f2937;border-radius:12px}
-    .btn{border-radius:10px;padding:.625rem 1rem}
-    .input{border-radius:.6rem;padding:.55rem .75rem;background:#0f172a;border:1px solid #334155;color:#e5e7eb}
+    :root { color-scheme: dark; }
+    body{background:#0b0f13;color:#e5e7eb;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,Noto Sans,sans-serif;}
+    .input{background:#1f2937;color:#fff;border:1px solid #374151;border-radius:6px;padding:6px 8px;font-size:14px;}
+    .input:focus{outline:none;border-color:#f59e0b;background:#111827;box-shadow:0 0 0 2px rgba(245,158,11,.25);}
+    input[type="checkbox"]{accent-color:#f59e0b;transform:scale(1.1);}
+    .btn{padding:6px 12px;border-radius:6px;font-weight:500;}
 
-    /* Presná plocha A4 pre export */
-    #pdf-wrapper{background:#fff;width:210mm;height:297mm;margin:0 auto;overflow:hidden;display:flex;justify-content:center;align-items:flex-start}
-    #pdf-sheet{width:210mm;height:297mm;background:#fff;color:#000;border-radius:12px;overflow:hidden;box-sizing:border-box}
-    #pdf-sheet table{table-layout:fixed;width:100%;border-collapse:collapse}
-    #pdf-sheet th,#pdf-sheet td{border:1px solid #e5e7eb;padding:8px;font-size:11px;color:#000!important;word-break:break-word;white-space:pre-wrap}
-    #pdf-sheet.pdf-compact{line-height:1.14;font-size:11px}
+    /* presná A4 plocha (exportujeme wrapper) */
+    #pdf-wrapper{background:#fff;width:210mm;height:297mm;margin:0 auto;overflow:hidden;display:flex;justify-content:center;align-items:flex-start;}
+    .sheet{width:210mm;height:297mm;background:#fff;color:#000;border-radius:12px;overflow:hidden;box-sizing:border-box;}
+    #pdf-sheet{width:100%;height:100%;box-sizing:border-box;padding:10mm 12mm;}
+
+    /* tabuľka a texty v PDF – drobnejšie, aby to vošlo na 1 stranu */
+    #pdf-sheet table{table-layout:fixed;width:100%;border-collapse:collapse;}
+    #pdf-sheet th,#pdf-sheet td{border:1px solid #e5e7eb;padding:6px;font-size:11px;color:#000!important;word-break:break-word;white-space:pre-wrap;line-height:1.2;}
+
+    /* kompaktný režim – zapína sa IBA počas exportu */
+    #pdf-sheet.pdf-compact{line-height:1.12;font-size:11px;}
   </style>
 </head>
 <body class="min-h-screen">
-  <div id="root"></div>
-  <script src="/app.js"></script>
+  <div class="max-w-6xl mx-auto p-4">
+    <h1 class="text-xl font-semibold mb-3">Revízna správa – Spektra Install</h1>
+    <div id="root"></div>
+  </div>
+
+  <script src="./app.js"></script>
   <script>
-    // PWA SW registrácia
-    if ('serviceWorker' in navigator) {
-      window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js'));
+    if('serviceWorker' in navigator){
+      addEventListener('load',()=>navigator.serviceWorker.register('./sw.js'));
     }
   </script>
 </body>
 </html>
-```
-
----
-
-## manifest.webmanifest
-
-```json
-{
-  "name": "Revízna správa – Spektra",
-  "short_name": "Revízna správa",
-  "start_url": "/",
-  "scope": "/",
-  "display": "standalone",
-  "background_color": "#0b0f13",
-  "theme_color": "#0b0f13",
-  "icons": [
-    { "src": "/icons/logo-32.png",  "sizes": "32x32",  "type": "image/png" },
-    { "src": "/icons/logo-48.png",  "sizes": "48x48",  "type": "image/png" },
-    { "src": "/icons/logo-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
-    { "src": "/icons/logo-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
-  ]
-}
-```
-
-> Uisti sa, že v repozitári existujú súbory: `/icons/logo-32.png`, `/icons/logo-48.png`, `/icons/logo-192.png`, `/icons/logo-512.png`.
-
----
-
-## sw.js (navýšený cache key)
-
-```js
-const CACHE = 'revizia-v7';
-self.addEventListener('install', (e) => {
-  e.waitUntil(caches.open(CACHE).then((c) => c.addAll([
-    '/',
-    '/index.html',
-    '/app.js',
-    '/manifest.webmanifest'
-  ])));
-});
-self.addEventListener('activate', (e) => {
-  e.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k)))));
-});
-self.addEventListener('fetch', (e) => {
-  e.respondWith(
-    caches.match(e.request).then(r => r || fetch(e.request))
-  );
-});
-```
-
----
-
-## app.js (opravené, bez použitia $1 mimo reťazca)
-
-```js
-/* global React, ReactDOM, html2pdf */
-const { useEffect, useRef, useState } = React;
-
-// Pomôcky
-const pad2 = (n) => String(n).padStart(2, '0');
-const todayStr = () => { const d = new Date(); return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`; };
-const genReportNo = () => { const d = new Date(); return `RS-${d.getFullYear()}${pad2(d.getMonth()+1)}${pad2(d.getDate())}-${pad2(d.getHours())}${pad2(d.getMinutes())}`; };
-
-// 16 bodov – definícia
-const CHECKLIST = [
-  ['vizual','Vizuálna prehliadka zariadenia (stav, korózia, tesnosť)'],
-  ['vyrobneCislo','Výrobné číslo kotla'],
-  ['typKotla','Typ kotla / výkon'],
-  ['spaliny','Hodnoty spalín (CO/CO₂/O₂/ťah/teplota)'],
-  ['tlakZaReg','Tlak plynu za regulátorom (mbar)'],
-  ['tesnost','Skúška tesnosti plynu (OK/NG)'],
-  ['poistnyVentil','Kontrola poistného ventilu'],
-  ['bezpPrvky','Bezpečnostné prvky – funkčná skúška'],
-  ['horak','Horák – stav, vyčistenie'],
-  ['filter','Čistenie filtrov plynu/vody'],
-  ['komin','Dymovod/komín – napojenie, ťah'],
-  ['spojky','Armatúry a spoje – únik/tesnosť'],
-  ['elektro','Elektrické pripojenie a uzemnenie – kontrola'],
-  ['voda','Tlak inštalácie / expanzná nádoba (bar)'],
-  ['regulator','Regulátor tlaku plynu – výrobné číslo'],
-  ['zaznam','Záznam o zistených nedostatkoch a poučenie obsluhy']
-];
-
-const DEFAULT_CHECKLIST = {
-  vizual:{ ok:true, val:'Bez korózie, tesné; kryty kompletné' },
-  vyrobneCislo:{ ok:true, val:'PTC24-2309-0011876' },
-  typKotla:{ ok:true, val:'Protherm Tiger Condens 24/28 KKO • 24 kW' },
-  spaliny:{ ok:true, val:'CO 8 ppm • CO₂ 9.2 % • O₂ 5.1 % • ťah 12 Pa • T 65 °C' },
-  tlakZaReg:{ ok:true, val:'18 mbar (pri záťaži)' },
-  tesnost:{ ok:true, val:'OK – úbytok 0 mbar / 5 min' },
-  poistnyVentil:{ ok:true, val:'Funkčný – skúška otvorenia bez úniku' },
-  bezpPrvky:{ ok:true, val:'STB a presostat funkčné, reakcia v limite' },
-  horak:{ ok:true, val:'Vyčistený, bez usadenín' },
-  filter:{ ok:true, val:'Filter plynu a vody vyčistený' },
-  komin:{ ok:true, val:'Koaxiál DN60/100, dĺžka 2,3 m, ťah stabilný' },
-  spojky:{ ok:true, val:'Bez únikov (penová skúška)' },
-  elektro:{ ok:true, val:'Uzemnenie OK, polarita správna' },
-  voda:{ ok:true, val:'1.3 bar (expanzná 0.9 bar)' },
-  regulator:{ ok:true, val:'RS-2309-11876' },
-  zaznam:{ ok:true, val:'Bez závad. Poučenie obsluhy; ďalšia kontrola o 12 mes.' }
-};
-
-const DEFAULT = () => ({
-  cislo: genReportNo(),
-  datum: todayStr(),
-  zakaznik: {
-    nazov:'Bytový dom Hurbanova 12',
-    adresa:'Hurbanova 12, 015 01 Rajec',
-    ico:'36789012',
-    dic:'2023456789',
-    email:'spravca@bd-hurbanova.sk'
-  },
-  checklist: { ...DEFAULT_CHECKLIST },
-  logoUrl:'/assets/logo-spektrainstall.png',
-  podpisTechnikaStampUrl:'/assets/podpis-technika.png',
-  podpisZakaznika:'',
-  podpisTechnika:''
-});
-
-function SignaturePad({ title='Podpis', onSave, onCancel }){
-  const ref = useRef(null), ctxRef = useRef(null);
-  const drawing = useRef(false), last = useRef({x:0,y:0});
-  useEffect(()=>{
-    const cvs = ref.current, dpr = window.devicePixelRatio || 1;
-    const r = cvs.getBoundingClientRect(); cvs.width = r.width * dpr; cvs.height = r.height * dpr;
-    const ctx = cvs.getContext('2d'); ctx.scale(dpr,dpr); ctx.lineWidth=2; ctx.lineCap='round'; ctx.strokeStyle='#111'; ctxRef.current = ctx;
-    const get = (e)=>{ const t = e.touches? e.touches[0] : e; const cr = cvs.getBoundingClientRect(); return { x:t.clientX-cr.left, y:t.clientY-cr.top }; };
-    const start=(e)=>{ e.preventDefault(); drawing.current=true; last.current=get(e); };
-    const move =(e)=>{ if(!drawing.current) return; e.preventDefault(); const p=get(e), ctx=ctxRef.current; ctx.beginPath(); ctx.moveTo(last.current.x,last.current.y); ctx.lineTo(p.x,p.y); ctx.stroke(); last.current=p; };
-    const end  =(e)=>{ e.preventDefault(); drawing.current=false; };
-    const opt={ passive:false };
-    cvs.addEventListener('mousedown',start,opt); cvs.addEventListener('mousemove',move,opt); window.addEventListener('mouseup',end,opt);
-    cvs.addEventListener('touchstart',start,opt); cvs.addEventListener('touchmove',move,opt); cvs.addEventListener('touchend',end,opt);
-    return ()=>{
-      cvs.removeEventListener('mousedown',start,opt); cvs.removeEventListener('mousemove',move,opt); window.removeEventListener('mouseup',end,opt);
-      cvs.removeEventListener('touchstart',start,opt); cvs.removeEventListener('touchmove',move,opt); cvs.removeEventListener('touchend',end,opt);
-    };
-  },[]);
-  const clear = ()=>{ const cvs=ref.current, ctx=ctxRef.current; ctx.clearRect(0,0,cvs.width,cvs.height); };
-  return React.createElement('div',{className:'fixed inset-0 bg-black/60 grid place-items-center',onClick:onCancel},
-    React.createElement('div',{className:'bg-white rounded-2xl w-[90vw] max-w-lg p-4',onClick:e=>e.stopPropagation()},
-      React.createElement('div',{className:'text-lg font-semibold mb-2'},title),
-      React.createElement('canvas',{ref:ref,className:'w-full h-40 rounded border'}),
-      React.createElement('div',{className:'mt-3 flex justify-between'},
-        React.createElement('button',{className:'btn bg-gray-200',onClick:clear},'Vymazať'),
-        React.createElement('div',null,
-          React.createElement('button',{className:'btn bg-gray-200 mr-2',onClick:onCancel},'Zrušiť'),
-          React.createElement('button',{className:'btn bg-emerald-600 text-white',onClick:()=>onSave(ref.current.toDataURL('image/png'))},'Uložiť podpis')
-        )
-      )
-    )
-  );
-}
-
-function Metric({label,value}){
-  return React.createElement('div',{className:'border rounded p-2 bg-white'},
-    React.createElement('div',{className:'text-[10px] text-neutral-500 mb-1'},label),
-    React.createElement('div',{className:'font-medium text-[12px] leading-tight text-neutral-900'},value||'—')
-  );
-}
-
-function SignBox({title,img,stamp}){
-  return React.createElement('div',null,
-    React.createElement('div',{className:'h-[95px] border rounded p-2 flex items-center justify-center bg-white relative overflow-hidden'},
-      stamp && React.createElement('img',{src:stamp,className:'absolute inset-0 m-auto max-h-[90px] opacity-90'}),
-      img ? React.createElement('img',{src:img,className:'relative max-h-[85px] object-contain'}) : React.createElement('span',{className:'text-xs text-neutral-400 relative'},`(${title.toLowerCase()})`)
-    ),
-    React.createElement('div',{className:'text-center text-xs mt-1'},title)
-  );
-}
-
-function App(){
-  const [report,setReport] = useState(()=>DEFAULT());
-  const [showSigZ,setShowSigZ] = useState(false);
-  const [showSigT,setShowSigT] = useState(false);
-
-  useEffect(()=>{
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(report.datum)) setReport(r=>({...r, datum: todayStr()}));
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  },[]);
-
-  const setChecklistVal = (key,patch)=> setReport(r=>({ ...r, checklist:{ ...r.checklist, [key]:{ ...(r.checklist[key]||{}), ...patch } } }));
-
-  // Share PDF – 1x A4
-  const sharePDF = async () => {
-    const wrapper = document.getElementById('pdf-wrapper');
-    const sheet   = document.getElementById('pdf-sheet');
-    sheet.classList.add('pdf-compact');
-    if (document.fonts && document.fonts.ready) { try{ await document.fonts.ready; }catch{} }
-    const imgs = wrapper.querySelectorAll('img');
-    await Promise.all(Array.from(imgs).map(img => img.complete ? null : new Promise(r => { img.onload = img.onerror = r; })));
-    const A4W=794, A4H=1123;
-    const prev = { transform:wrapper.style.transform, transformOrigin:wrapper.style.transformOrigin, width:wrapper.style.width, height:wrapper.style.height };
-    const realW = Math.ceil(wrapper.scrollWidth), realH = Math.ceil(wrapper.scrollHeight);
-    if (realW > A4W || realH > A4H) {
-      const scale = Math.min(A4W/realW, A4H/realH);
-      wrapper.style.transformOrigin='top left';
-      wrapper.style.transform=`scale(${scale})`;
-      wrapper.style.width=`${A4W}px`;
-      wrapper.style.height=`${A4H}px`;
-    }
-    try{
-      const worker = html2pdf().set({
-        margin:0,
-        image:{type:'jpeg',quality:0.98},
-        html2canvas:{ scale:2,useCORS:true,allowTaint:true,scrollY:0,backgroundColor:'#ffffff', width:A4W,height:A4H,windowWidth:A4W,windowHeight:A4H,letterRendering:true },
-        jsPDF:{unit:'mm',format:'a4',orientation:'portrait'},
-        pagebreak:{mode:[]}
-      }).from(wrapper);
-      const pdf = await worker.toPdf().get('pdf');
-      const blob = new Blob([pdf.output('arraybuffer')],{ type:'application/pdf' });
-      const filename = `Revízna_sprava-${(typeof report?.cislo==='string'?report.cislo:'report')}.pdf`;
-
-      if (navigator.canShare) {
-        const file = new File([blob], filename, { type:'application/pdf' });
-        if (navigator.canShare({ files:[file] })) {
-          try { await navigator.share({ files:[file], title:'Revízna správa', text:'Revízna správa v PDF (1× A4)' }); return; } catch {}
-        }
-      }
-      const url = URL.createObjectURL(blob);
-      const w = window.open(url,'_blank');
-      if (w) { setTimeout(()=>{ try{ w.focus(); w.print(); }catch{} },400); }
-      else {
-        const a=document.createElement('a'); a.href=url; a.download=filename; document.body.appendChild(a); a.click(); a.remove();
-      }
-      setTimeout(()=>URL.revokeObjectURL(url),2000);
-    } finally {
-      sheet.classList.remove('pdf-compact');
-      wrapper.style.transform = prev.transform || '';
-      wrapper.style.transformOrigin = prev.transformOrigin || '';
-      wrapper.style.width = prev.width || '';
-      wrapper.style.height = prev.height || '';
-    }
-  };
-
-  const Input = (props)=> React.createElement('input',{...props,className:`input w-full ${props.className||''}`});
-
-  return React.createElement('div',{className:'max-w-6xl mx-auto px-4 py-6'},
-    React.createElement('div',{className:'grid grid-cols-1 lg:grid-cols-2 gap-6'},
-      React.createElement('section',{className:'card p-4 space-y-4'},
-        React.createElement('h2',{className:'text-xl font-semibold'},'Údaje'),
-        React.createElement('div',{className:'grid grid-cols-1 md:grid-cols-2 gap-3'},
-          React.createElement('label',null,'Názov', Input({ value:report.zakaznik.nazov, onChange:e=>setReport(r=>({...r,zakaznik:{...r.zakaznik,nazov:e.target.value}})) })),
-          React.createElement('label',null,'Adresa', Input({ value:report.zakaznik.adresa, onChange:e=>setReport(r=>({...r,zakaznik:{...r.zakaznik,adresa:e.target.value}})) })),
-          React.createElement('label',null,'IČO',    Input({ value:report.zakaznik.ico, onChange:e=>setReport(r=>({...r,zakaznik:{...r.zakaznik,ico:e.target.value}})) })),
-          React.createElement('label',null,'DIČ',    Input({ value:report.zakaznik.dic, onChange:e=>setReport(r=>({...r,zakaznik:{...r.zakaznik,dic:e.target.value}})) })),
-          React.createElement('label',{className:'md:col-span-2'},'E-mail', Input({ type:'email', value:report.zakaznik.email, onChange:e=>setReport(r=>({...r,zakaznik:{...r.zakaznik,email:e.target.value}})) })),
-          React.createElement('label',{className:'md:col-span-2'},'Dátum revízie',
-            React.createElement('input',{ type:'date', className:'input w-full', value:report.datum, onChange:e=>setReport(r=>({...r, datum:e.target.value})) })
-          )
-        ),
-        React.createElement('h3',{className:'text-lg font-semibold'},'Merania – rýchle polia'),
-        React.createElement('div',{className:'grid grid-cols-1 md:grid-cols-2 gap-3'},
-          React.createElement('label',null,'Spaliny',       Input({ value:report.checklist.spaliny.val,       onChange:e=>setChecklistVal('spaliny',{val:e.target.value}) })),
-          React.createElement('label',null,'Tlak plynu za regulátorom (mbar)', Input({ value:report.checklist.tlakZaReg.val, onChange:e=>setChecklistVal('tlakZaReg',{val:e.target.value}) })),
-          React.createElement('label',null,'Tlak systému / expanzná nádoba',   Input({ value:report.checklist.voda.val,      onChange:e=>setChecklistVal('voda',{val:e.target.value}) })),
-          React.createElement('label',null,'Komín / ťah',  Input({ value:report.checklist.komin.val,         onChange:e=>setChecklistVal('komin',{val:e.target.value}) }))
-        ),
-        React.createElement('h3',{className:'text-lg font-semibold'},'Kontrolný zoznam – Plynový kotol'),
-        React.createElement('div',{className:'grid grid-cols-1 gap-3'},
-          CHECKLIST.map(([key,label])=> React.createElement('div',{key, className:'flex items-center gap-3'},
-            React.createElement('input',{type:'checkbox',checked:!!report.checklist[key]?.ok,onChange:e=>setChecklistVal(key,{ok:e.target.checked})}),
-            React.createElement('label',{className:'flex-1 text-sm'},label),
-            Input({ className:'w-48', value:(report.checklist[key]?.val||''), onChange:e=>setChecklistVal(key,{val:e.target.value}) })
-          ))
-        ),
-        React.createElement('div',{className:'flex gap-2 flex-wrap pt-2'},
-          React.createElement('button',{className:'btn bg-gray-700',onClick:()=>setShowSigZ(true)},'✍️ Podpis zákazníka'),
-          React.createElement('button',{className:'btn bg-gray-700',onClick:()=>setShowSigT(true)},'✍️ Podpis technika'),
-          React.createElement('button',{className:'btn bg-amber-600 text-white',onClick:sharePDF},'Zdieľať PDF')
-        )
-      ),
-      React.createElement('section',{className:'card p-2'},
-        React.createElement('div',{id:'pdf-wrapper',className:'mx-auto',style:{background:'#fff',width:'210mm',height:'297mm',overflow:'hidden',display:'flex',justifyContent:'center',alignItems:'flex-start'}},
-          React.createElement('div',{id:'pdf-sheet',className:'sheet w-[210mm] h-[297mm]'},
-            React.createElement('div',{className:'p-6 border-b flex gap-4 items-start'},
-              React.createElement('div',{className:'w-20 h-20 rounded bg-white grid place-items-center overflow-hidden'},
-                React.createElement('img',{src:report.logoUrl,className:'object-contain w-full h-full'})
-              ),
-              React.createElement('div',{className:'flex-1'},
-                React.createElement('div',{className:'text-xl font-bold'},'Spektra Install'),
-                React.createElement('div',{className:'text-xs leading-5'},
-                  React.createElement('div',null,React.createElement('b',null,'IČO:'),' 53690036'),
-                  React.createElement('div',null,React.createElement('b',null,'Sídlo:'),' Rajecká Lesná 98, 01315')
-                )
-              ),
-              React.createElement('div',{className:'text-right'},
-                React.createElement('div',{className:'text-xs'},'Číslo správy:'),
-                React.createElement('div',{className:'text-lg font-semibold'},report.cislo),
-                React.createElement('div',{className:'text-xs'},'Dátum: ',report.datum)
-              )
-            ),
-            React.createElement('div',{className:'px-6 pt-4 grid grid-cols-2 gap-4'},
-              React.createElement('div',{className:'border rounded p-3 text-xs'},
-                React.createElement('div',{className:'font-semibold mb-1'},'Zákazník'),
-                React.createElement('div',null,report.zakaznik.nazov),
-                React.createElement('div',null,report.zakaznik.adresa),
-                React.createElement('div',null,'IČO: ',report.zakaznik.ico,' • DIČ: ',report.zakaznik.dic,' • e-mail: ',report.zakaznik.email)
-              ),
-              React.createElement('div',{className:'border rounded p-3 text-xs'},
-                React.createElement('div',{className:'font-semibold mb-1'},'Zariadenie'),
-                React.createElement('div',null,'Plynový kotol'),
-                React.createElement('div',null,'Výrobné číslo: ',report.checklist.vyrobneCislo.val)
-              )
-            ),
-            React.createElement('div',{className:'px-6 pt-3 grid grid-cols-4 gap-3 text-xs'},
-              React.createElement(Metric,{label:'Spaliny',value:report.checklist.spaliny.val}),
-              React.createElement(Metric,{label:'Tlak plynu za regulátorom',value:report.checklist.tlakZaReg.val}),
-              React.createElement(Metric,{label:'Tlak systému / expanzná nádoba',value:report.checklist.voda.val}),
-              React.createElement(Metric,{label:'Komín / ťah',value:report.checklist.komin.val})
-            ),
-            React.createElement('div',{className:'px-6 pt-3'},
-              React.createElement('table',null,
-                React.createElement('thead',null,
-                  React.createElement('tr',null,
-                    React.createElement('th',null,'Bod'),
-                    React.createElement('th',null,'OK'),
-                    React.createElement('th',null,'Hodnota / Poznámka')
-                  )
-                ),
-                React.createElement('tbody',null,
-                  CHECKLIST.map(([key,label])=> React.createElement('tr',{key},
-                    React.createElement('td',null,label),
-                    React.createElement('td',null, report.checklist[key]?.ok ? '✔' : '—'),
-                    React.createElement('td',null, report.checklist[key]?.val || '')
-                  ))
-                )
-              )
-            ),
-            React.createElement('div',{className:'px-6 pt-4 grid grid-cols-2 gap-6 items-end'},
-              React.createElement(SignBox,{title:'Podpis zákazníka', img:report.podpisZakaznika}),
-              React.createElement(SignBox,{title:'Podpis revízneho technika', img:report.podpisTechnika, stamp:report.podpisTechnikaStampUrl})
-            ),
-            React.createElement('div',{className:'px-6 pb-4 text-[10px] text-neutral-600'},
-              React.createElement('b',null,'Normy a predpisy: '),' STN EN 15502-1/2; STN 38 6441; STN 07 0703'
-            )
-          )
-        )
-      )
-    ),
-    showSigZ && React.createElement(SignaturePad,{ title:'Podpis zákazníka', onSave:(png)=>{ setReport(r=>({...r,podpisZakaznika:png})); setShowSigZ(false); }, onCancel:()=>setShowSigZ(false) }),
-    showSigT && React.createElement(SignaturePad,{ title:'Podpis revízneho technika', onSave:(png)=>{ setReport(r=>({...r,podpisTechnika:png})); setShowSigT(false); }, onCancel:()=>setShowSigT(false) })
-  );
-}
-
-ReactDOM.createRoot(document.getElementById('root')).render(React.createElement(App));
-```
-
----
-
-### Poznámky
-
-* Ak ešte nie sú, pridaj do repozitára priečinok `/icons/` so súbormi `logo-32.png`, `logo-48.png`, `logo-192.png`, `logo-512.png` (štvorcové PNG, transparentné).
-* Po deploy zvýš verziu `CACHE` v `sw.js` vždy o +1, aby sa PWA prečistila a načítala nové súbory.
-* V kóde sa nikde nepoužívajú nevalidné `$1/$2` premenné; ak budeš robiť `replace`, používaj náhradný reťazec v úvodzovkách (napr. `'$1$2'`) alebo callback.
