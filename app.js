@@ -102,29 +102,57 @@ function addToArchive(report){
 }
 function deleteFromArchive(id){ saveArchive(loadArchive().filter(e=>e.id!==id)); }
 
-/* ===================== PDF drobnosti ===================== */
-function Metric({label,value}){
-  return React.createElement('div',{className:'border rounded p-2 bg-white'},
-    React.createElement('div',{className:'text-[10px] text-neutral-500 mb-1'},label),
-    React.createElement('div',{className:'font-medium text-[12px] leading-tight text-neutral-900'},value||'—')
-  );
-}
-function SignBox({title,img,stamp}){
-  return React.createElement('div',null,
-    React.createElement('div',{className:'h-[90px] border rounded p-2 flex items-center justify-center bg-white relative overflow-hidden'},
-      stamp && React.createElement('img',{src:stamp,className:'absolute inset-0 m-auto max-h-[84px] opacity-90'}),
-      img ? React.createElement('img',{src:img,className:'relative max-h-[80px] object-contain'}) : React.createElement('span',{className:'text-xs text-neutral-400 relative'},`(${title.toLowerCase()})`)
-    ),
-    React.createElement('div',{className:'text-center text-xs mt-1'},title)
+/* ===================== PDF drobnosti ===================== */$1
+
+/* ===================== Podpisové plátno ===================== */
+function SignaturePad({ title = 'Podpis', onSave, onCancel }){
+  const ref = React.useRef(null);
+  const ctxRef = React.useRef(null);
+  const drawing = React.useRef(false);
+  const last = React.useRef({ x: 0, y: 0 });
+
+  React.useEffect(() => {
+    const cvs = ref.current;
+    const dpr = window.devicePixelRatio || 1;
+    const r = cvs.getBoundingClientRect();
+    cvs.width = r.width * dpr; cvs.height = r.height * dpr;
+    const ctx = cvs.getContext('2d');
+    ctx.scale(dpr, dpr); ctx.lineWidth = 2; ctx.lineCap = 'round'; ctx.strokeStyle = '#111';
+    ctxRef.current = ctx;
+
+    const get = (e) => { const t = e.touches ? e.touches[0] : e; const cr = cvs.getBoundingClientRect(); return { x: t.clientX - cr.left, y: t.clientY - cr.top }; };
+    const start = (e) => { e.preventDefault(); drawing.current = true; last.current = get(e); };
+    const move = (e) => { if (!drawing.current) return; e.preventDefault(); const p = get(e), ctx = ctxRef.current; ctx.beginPath(); ctx.moveTo(last.current.x, last.current.y); ctx.lineTo(p.x, p.y); ctx.stroke(); last.current = p; };
+    const end = (e) => { e.preventDefault(); drawing.current = false; };
+    const opt = { passive: false };
+    cvs.addEventListener('mousedown', start, opt); cvs.addEventListener('mousemove', move, opt); window.addEventListener('mouseup', end, opt);
+    cvs.addEventListener('touchstart', start, opt); cvs.addEventListener('touchmove', move, opt); cvs.addEventListener('touchend', end, opt);
+    return () => {
+      cvs.removeEventListener('mousedown', start, opt); cvs.removeEventListener('mousemove', move, opt); window.removeEventListener('mouseup', end, opt);
+      cvs.removeEventListener('touchstart', start, opt); cvs.removeEventListener('touchmove', move, opt); cvs.removeEventListener('touchend', end, opt);
+    };
+  }, []);
+
+  const clear = () => { const cvs = ref.current; const ctx = ctxRef.current; ctx.clearRect(0, 0, cvs.width, cvs.height); };
+
+  return React.createElement('div', { className: 'fixed inset-0 bg-black/60 grid place-items-center z-50', onClick: onCancel },
+    React.createElement('div', { className: 'bg-white rounded-2xl w-[90vw] max-w-lg p-4', onClick: e => e.stopPropagation() },
+      React.createElement('div', { className: 'text-lg font-semibold mb-2' }, title),
+      React.createElement('canvas', { ref: ref, className: 'w-full h-40 rounded border' }),
+      React.createElement('div', { className: 'mt-3 flex justify-between' },
+        React.createElement('button', { className: 'btn bg-gray-200', onClick: clear }, 'Vymazať'),
+        React.createElement('div', null,
+          React.createElement('button', { className: 'btn bg-gray-200 mr-2', onClick: onCancel }, 'Zrušiť'),
+          React.createElement('button', { className: 'btn bg-emerald-600 text-white', onClick: () => onSave(ref.current.toDataURL('image/png')) }, 'Uložiť podpis')
+        )
+      )
+    )
   );
 }
 
 /* ===================== App ===================== */
-function App(){
-  const [report,setReport] = useState(()=>DEFAULT_REPORT('boiler'));
-  const [search, setSearch] = useState('');
-  const [seqYear, setSeqYear] = useState(new Date().getFullYear());
-  const [seqVal, setSeqVal] = useState(getSeq(new Date().getFullYear()));
+function App(){$1const [showSigZ, setShowSigZ] = useState(false);
+  const [showSigT, setShowSigT] = useState(false);
 
   const archive = useMemo(()=> loadArchive(), [report.cislo]);
 
@@ -210,6 +238,8 @@ function App(){
         ),
 
         React.createElement('div',{className:'flex gap-2 flex-wrap pt-2'},
+          React.createElement('button',{className:'btn bg-gray-700', onClick:()=>setShowSigZ(true)},'✍️ Podpis zákazníka'),
+          React.createElement('button',{className:'btn bg-gray-700', onClick:()=>setShowSigT(true)},'✍️ Podpis technika'),
           React.createElement('button',{className:'btn bg-amber-600 text-white',onClick:sharePDF},'Zdieľať PDF'),
           React.createElement('button',{className:'btn bg-emerald-600 text-white',onClick:saveCurrentToArchive},'Uložiť do archívu'),
           React.createElement('button',{className:'btn bg-sky-700 text-white',onClick:newReport},'Nová správa')
@@ -249,29 +279,11 @@ function App(){
     ),
 
     /* ====== PDF náhľad ====== */
-    React.createElement('section',{className:'p-2 rounded-xl border border-white/10 bg-white/5 mt-6'},
-      React.createElement('div',{id:'pdf-wrapper',className:'mx-auto',style:{background:'#fff',width:'210mm',height:'297mm',overflow:'hidden',display:'flex',justifyContent:'center',alignItems:'flex-start'}},
-        React.createElement('div',{id:'pdf-sheet',className:'sheet'},
-          React.createElement('div',{className:'p-4 border-b flex gap-4 items-start'},
-            React.createElement('div',{className:'w-16 h-16 rounded bg-white grid place-items-center overflow-hidden'}, React.createElement('img',{src:report.logoUrl,className:'object-contain w-full h-full'})),
-            React.createElement('div',{className:'flex-1'}, React.createElement('div',{className:'text-lg font-bold'},'Spektra Install'), React.createElement('div',{className:'text-[11px] leading-5'}, React.createElement('div',null,React.createElement('b',null,'IČO:'),' 53690036'), React.createElement('div',null,React.createElement('b',null,'Sídlo:'),' Rajecká Lesná 98, 01315'))),
-            React.createElement('div',{className:'text-right'}, React.createElement('div',{className:'text-[11px]'},'Číslo správy:'), React.createElement('div',{className:'text-base font-semibold'},report.cislo), React.createElement('div',{className:'text-[11px]'},'Dátum: ',report.datum))
-          ),
-          React.createElement('div',{className:'px-4 pt-3 grid grid-cols-2 gap-3 text-[12px]'},
-            React.createElement('div',{className:'border rounded p-2 text-[11px] bg-white'}, React.createElement('div',{className:'font-semibold mb-1'},'Zákazník'), React.createElement('div',null,report.zakaznik.nazov), React.createElement('div',null,report.zakaznik.adresa), React.createElement('div',null,'IČO: ',report.zakaznik.ico,' • DIČ: ',report.zakaznik.dic,' • e-mail: ',report.zakaznik.email)),
-            React.createElement('div',{className:'border rounded p-2 text-[11px] bg-white'}, React.createElement('div',{className:'font-semibold mb-1'},'Zariadenie'), React.createElement('div',null,TEMPLATES[report.type].deviceTitle), React.createElement('div',null,`${TEMPLATES[report.type].snLabel}: `,report.checklist.vyrobneCislo?.val||''))
-          ),
-          React.createElement('div',{className:'px-4 pt-3 grid grid-cols-4 gap-2 text-xs'}, ...TEMPLATES[report.type].metrics.map(([k,lab])=>React.createElement(Metric,{key:k,label:lab,value:report.checklist[k]?.val}))),
-          React.createElement('div',{className:'px-4 pt-3'}, React.createElement('table',null, React.createElement('thead',null, React.createElement('tr',null, React.createElement('th',null,'Bod'), React.createElement('th',null,'OK'), React.createElement('th',null,'Hodnota / Poznámka'))), React.createElement('tbody',null, TEMPLATES[report.type].checklist.map(([key,label])=>React.createElement('tr',{key}, React.createElement('td',null,label), React.createElement('td',null, report.checklist[key]?.ok ? '✔' : '—'), React.createElement('td',null, report.checklist[key]?.val || '')))))),
-          React.createElement('div',{className:'px-4 pt-3 grid grid-cols-2 gap-4 items-end'}, React.createElement(SignBox,{title:'Podpis zákazníka', img:report.podpisZakaznika}), React.createElement(SignBox,{title:'Podpis revízneho technika', img:report.podpisTechnika, stamp:report.podpisTechnikaStampUrl})),
-          React.createElement('div',{className:'px-4 pb-3 text-[10px] text-neutral-600 space-y-1'},
-            React.createElement('div',null, React.createElement('b',null,'Normy a predpisy: '), report.type==='hp' ? 'STN EN 378; Nariadenie (EÚ) 517/2014 (F‑Gas); STN 06 0310; STN EN 14511' : (report.type==='pellet' ? 'STN EN 303-5; STN 73 4201; STN EN 14785' : 'STN EN 15502-1/2; STN 38 6441; STN 07 0703')),
-            React.createElement('div',{className:'italic text-[9px] leading-tight text-neutral-500'}, 'Ochrana osobných údajov: Údaje uvedené v tejto správe sú spracúvané spoločnosťou Spektra Install s.r.o., IČO 53690036, výhradne na účel vyhotovenia, evidencie a archivácie revíznej dokumentácie podľa platných právnych predpisov a nariadenia GDPR.')
-          )
-        )
-      ),
-      React.createElement('div',{className:'mt-3 text-center'}, React.createElement('button',{className:'btn bg-amber-600 text-white',onClick:sharePDF},'Zdieľať PDF'))
-    )
+    React.createElement('section',{className:'p-2 rounded-xl border border-white/10 bg-white/5 mt-6'},$1),
+
+    // podpisové modály
+    showSigZ && React.createElement(SignaturePad,{ title:'Podpis zákazníka', onSave:(png)=>{ setReport(r=>({...r,podpisZakaznika:png})); setShowSigZ(false); }, onCancel:()=>setShowSigZ(false) }),
+    showSigT && React.createElement(SignaturePad,{ title:'Podpis revízneho technika', onSave:(png)=>{ setReport(r=>({...r,podpisTechnika:png})); setShowSigT(false); }, onCancel:()=>setShowSigT(false) })
   );
 }
 
